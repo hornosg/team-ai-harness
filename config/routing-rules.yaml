@@ -1,0 +1,129 @@
+# Routing Rules — Reglas hardcodeadas del Meta-Router
+# Estas reglas no se negocian ni se saltean por urgencia
+
+# Keywords que fuerzan L4 en cualquier pedido de dev
+l4_keywords:
+  financial:
+    - pago
+    - payment
+    - dinero
+    - money
+    - wallet
+    - cobro
+    - factura
+    - invoice
+    - conciliación
+    - liquidación
+    - settlement
+    - tarjeta
+    - card
+    - cuenta bancaria
+  auth:
+    - auth
+    - login
+    - sesión
+    - session
+    - token
+    - JWT
+    - OAuth
+    - SSO
+    - credenciales
+    - password
+  compliance:
+    - BCRA
+    - PCI
+    - PCI DSS
+    - compliance
+    - datos sensibles
+    - datos personales
+    - auditoría
+
+# L4 requiere SIEMPRE (no negociable)
+l4_required_agents:
+  - dev-architect
+  - dev-security
+
+# Dominio por tipo de pedido
+domain_routing:
+  dev:
+    keywords:
+      - bug
+      - error
+      - fix
+      - feature
+      - endpoint
+      - API
+      - base de datos
+      - deploy
+      - infra
+      - performance
+      - test
+      - código
+      - PR
+      - refactor
+    primary_orchestrator: dev-orchestrator
+
+  product:
+    keywords:
+      - qué construir
+      - roadmap
+      - discovery
+      - usuario
+      - research
+      - validar
+      - hipótesis
+      - UX
+      - diseño
+      - backlog
+      - historia de usuario
+      - métrica de producto
+    primary_orchestrator: product-orchestrator
+
+  marketing:
+    keywords:
+      - copy
+      - campaña
+      - contenido
+      - redes sociales
+      - brand
+      - SEO
+      - ads
+      - lanzamiento
+      - comunidad
+      - post
+    primary_orchestrator: marketing-orchestrator
+
+# Pipelines cross-domain
+cross_domain_pipelines:
+  launch:
+    description: Lanzamiento de feature o producto
+    sequence:
+      - product-orchestrator  # define scope y métricas
+      - dev-orchestrator      # implementa
+      - marketing-orchestrator # comunica
+      - product-orchestrator  # mide resultados
+
+  growth:
+    description: Iniciativa de crecimiento que cruza dominios
+    sequence:
+      - product-orchestrator  # identifica cuello de botella
+      - dev-orchestrator      # implementa cambios
+      - marketing-orchestrator # ajusta comunicación
+
+  incident:
+    description: Incidente en producción
+    sequence:
+      - dev-orchestrator      # diagnóstico y fix
+      - product-orchestrator  # impacto en usuario
+      - marketing-orchestrator # comunicación (si escala)
+
+# Escalamiento por urgencia
+urgency_overrides:
+  production_down:
+    skip_to: dev-orchestrator
+    level: L3_minimum
+    notify: [dev-architect, dev-monitoreo]
+  security_breach:
+    skip_to: dev-orchestrator
+    level: L4
+    notify: [dev-architect, dev-security, dev-devops]

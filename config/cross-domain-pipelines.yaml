@@ -1,0 +1,137 @@
+# Cross-Domain Pipelines
+# Secuencias de trabajo que cruzan dev, producto y marketing
+
+pipelines:
+
+  feature-launch:
+    name: Lanzamiento de Feature
+    trigger: "Quiero lanzar [feature]"
+    steps:
+      - team: product
+        agent: product-orchestrator
+        action: "Definir scope, métricas de éxito, criterios de validación"
+        deliverable: "Spec + AC + métricas baseline"
+        blocks_next: true
+
+      - team: dev
+        agent: dev-orchestrator
+        action: "Estimar, identificar riesgos técnicos, implementar"
+        deliverable: "Feature en staging lista para QA"
+        blocks_next: true
+
+      - team: product
+        agent: product-orchestrator
+        action: "Validar que la implementación cumple criterios de aceptación"
+        deliverable: "Sign-off de producto"
+        blocks_next: true
+
+      - team: marketing
+        agent: marketing-orchestrator
+        action: "Preparar mensajería, contenido de lanzamiento, plan de distribución"
+        deliverable: "Assets de lanzamiento listos"
+        blocks_next: true
+
+      - team: dev
+        agent: dev-orchestrator
+        action: "Deploy a producción + activación controlada (feature flag si aplica)"
+        deliverable: "Feature en producción"
+        blocks_next: false
+
+      - team: product
+        agent: product-orchestrator
+        action: "Medir resultados vs métricas de éxito definidas en paso 1"
+        deliverable: "Reporte de impacto (7 días post-lanzamiento)"
+        blocks_next: false
+
+  growth-initiative:
+    name: Iniciativa de Crecimiento
+    trigger: "Mejorar [métrica de negocio]"
+    steps:
+      - team: product
+        agent: product-orchestrator
+        action: "Identificar cuello de botella con @product-analyst"
+        deliverable: "Hipótesis de qué cambiar y por qué"
+        blocks_next: true
+
+      - team: dev
+        agent: dev-orchestrator
+        action: "Implementar cambios técnicos para la hipótesis"
+        deliverable: "Cambios en staging"
+        blocks_next: true
+
+      - team: marketing
+        agent: marketing-orchestrator
+        action: "Ajustar comunicación para reforzar el cambio"
+        deliverable: "Copy y assets actualizados"
+        blocks_next: false
+
+      - team: product
+        agent: product-orchestrator
+        action: "Medir impacto y decidir escalar o pivotar"
+        deliverable: "Decisión con datos"
+        blocks_next: false
+
+  incident-response:
+    name: Respuesta a Incidente
+    trigger: "Bug/incidente en producción"
+    steps:
+      - team: dev
+        agent: dev-orchestrator
+        action: "Diagnóstico (@dev-monitoreo) → decisión fix vs rollback → implementar"
+        deliverable: "Servicio restaurado"
+        blocks_next: false
+        urgent: true
+
+      - team: product
+        agent: product-orchestrator
+        action: "Evaluar impacto en usuarios y decidir si comunicar"
+        deliverable: "Decisión de comunicación"
+        blocks_next: false
+
+      - team: marketing
+        agent: marketing-orchestrator
+        action: "Comunicación a usuarios afectados (solo si @product-orchestrator lo decide)"
+        deliverable: "Mensaje de comunicación"
+        condition: "Si impacto > X usuarios o duración > Y horas"
+        blocks_next: false
+
+      - team: dev
+        agent: dev-orchestrator
+        action: "Postmortem (@dev-monitoreo) → action items"
+        deliverable: "Postmortem publicado"
+        blocks_next: false
+
+  new-segment:
+    name: Expansión a Nuevo Segmento
+    trigger: "Queremos llegar a [nuevo tipo de negocio]"
+    steps:
+      - team: product
+        agent: product-orchestrator
+        action: "Research de segmento (@product-strategist + @ux-researcher)"
+        deliverable: "Perfil de segmento + jobs-to-be-done + gaps actuales del producto"
+        blocks_next: true
+
+      - team: marketing
+        agent: marketing-orchestrator
+        action: "Mensajería para el segmento (@brand-strategist)"
+        deliverable: "Mensajes core + tono para el segmento"
+        blocks_next: false
+
+      - team: dev
+        agent: dev-orchestrator
+        action: "Gaps técnicos identificados por producto → implementar"
+        deliverable: "Features necesarias para el segmento"
+        condition: "Si producto identificó gaps técnicos"
+        blocks_next: false
+
+      - team: marketing
+        agent: marketing-orchestrator
+        action: "Campaña de awareness para el segmento"
+        deliverable: "Campaña activa"
+        blocks_next: false
+
+      - team: product
+        agent: product-orchestrator
+        action: "Medir adopción del nuevo segmento"
+        deliverable: "Reporte de penetración en segmento"
+        blocks_next: false

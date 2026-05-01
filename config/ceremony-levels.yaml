@@ -1,0 +1,119 @@
+# Ceremony Levels — Sistema L1-L4 del equipo de desarrollo
+# Determina el rigor del proceso según riesgo y reversibilidad
+
+levels:
+  L1:
+    name: Quick Fix
+    description: Cambio simple, reversible, bajo riesgo
+    criteria:
+      - Tiempo estimado menor a 30 minutos
+      - Completamente reversible en producción
+      - No toca flujos de dinero ni autenticación
+      - No modifica schema de base de datos
+      - No cambia contratos de API existentes
+    examples:
+      - Fix de typo en UI
+      - Ajuste de validación simple
+      - Cambio de valor de configuración
+      - Hotfix de CSS/estilo
+      - Actualización de texto estático
+    required_agents:
+      - dev-orchestrator (ruteo)
+      - dev-technical-leader (si tiene contexto relevante)
+      - dev-junior-backend o dev-junior-frontend (implementación)
+    optional_agents: []
+    blocked_agents:
+      - dev-architect (no es necesario)
+      - dev-security (no es necesario)
+    adr_required: false
+    qa_required: false  # smoke test es suficiente
+
+  L2:
+    name: Feature Estándar
+    description: Feature nueva dentro de patrones establecidos
+    criteria:
+      - Spec clara con criterios de aceptación
+      - Sigue patrones de arquitectura existentes
+      - No introduce nuevos bounded contexts
+      - No toca flujos de dinero ni autenticación
+      - Cambios de DB son aditivos (no destructivos)
+    examples:
+      - Nuevo endpoint CRUD
+      - Nueva pantalla siguiendo design system
+      - Integración con servicio ya definido en la arquitectura
+      - Nueva validación de negocio en dominio existente
+    required_agents:
+      - dev-orchestrator (ruteo + nivel)
+      - dev-technical-leader (revisión previa + review de PR)
+      - dev-senior-backend o dev-senior-frontend (implementación)
+      - dev-qa (testing funcional)
+    optional_agents:
+      - dev-junior-backend (si el senior puede supervisar)
+    blocked_agents:
+      - dev-architect (no necesario si no hay cambio estructural)
+    adr_required: false
+    qa_required: true
+
+  L3:
+    name: Cambio Significativo
+    description: Cambio de arquitectura, migración de datos, o nueva integración crítica
+    criteria:
+      - Modifica arquitectura o introduce nuevo patrón
+      - Migración de base de datos (especialmente destructiva)
+      - Nueva integración con sistema externo crítico
+      - Refactor de dominio existente
+      - Feature con edge cases complejos o estado distribuido
+      - Cambia contratos de API existentes (breaking change)
+    examples:
+      - Nuevo bounded context
+      - Sistema de notificaciones push
+      - Integración con nueva plataforma de pago (scope, no L4 por sí solo)
+      - Migración de base de datos
+      - Implementación de CQRS o Event Sourcing en dominio existente
+    required_agents:
+      - dev-architect (diseño + ADR obligatorio)
+      - dev-technical-leader (guía de implementación + review)
+      - dev-senior-backend (implementación principal)
+      - dev-qa (testing exhaustivo)
+      - dev-monitoreo (sign-off de observabilidad)
+    optional_agents:
+      - dev-devops (si hay cambios de infra asociados)
+    adr_required: true
+    qa_required: true
+    monitoreo_signoff: true
+
+  L4:
+    name: Crítico / Alto Riesgo
+    description: Toca dinero, auth, datos sensibles, o compliance
+    criteria:
+      - Cualquier flujo de pago o procesamiento financiero
+      - Modificación del sistema de autenticación/autorización
+      - Almacenamiento o procesamiento de datos sensibles (tarjetas, DNI, etc.)
+      - Cambios con implicaciones de compliance (BCRA, PCI DSS)
+      - Features con potencial de pérdida de datos irreversible
+    examples:
+      - Integración con Mercado Pago, Stripe, u otro PSP
+      - Sistema de auth / OAuth / SSO
+      - Wallets y transferencias
+      - Conciliación financiera
+      - Cualquier flujo donde el usuario ingrese datos de pago
+    required_agents:
+      - dev-architect (diseño + ADR obligatorio)
+      - dev-security (threat modeling + revisión de superficie)
+      - dev-technical-leader (implementación supervisada)
+      - dev-senior-backend (implementación)
+      - dev-qa (testing exhaustivo + security testing básico)
+      - dev-monitoreo (sign-off + alertas específicas de pago/auth)
+      - dev-devops (hardening de infra si aplica)
+    negotiable: false  # ningún agente de esta lista es opcional
+    adr_required: true
+    qa_required: true
+    security_review: true
+    monitoreo_signoff: true
+
+# Downgrade de nivel (requiere justificación explícita)
+downgrade_rules:
+  - condition: "Owner pide bajar nivel por urgencia"
+    response: "El nivel lo determina el riesgo, no la urgencia. Documentar el riesgo aceptado explícitamente."
+  - condition: "Feature L4 pero 'solo un cambio pequeño'"
+    response: "Si toca money/auth/compliance, es L4. Sin excepciones."

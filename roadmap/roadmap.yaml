@@ -1,0 +1,101 @@
+# roadmap.yaml
+# Fuente de verdad del roadmap. Los agentes leen este archivo para contextualizar
+# propuestas, priorizar trabajo y actualizar estado al cerrar épicas.
+#
+# Estados válidos: pendiente | en-progreso | bloqueado | completo | deprecado
+# Prioridades:     critica | alta | media | baja
+
+proyecto:
+  nombre: "[NOMBRE DEL PROYECTO]"
+  descripcion: "[Qué es y para quién — una oración]"
+  norte: "[Objetivo concreto y medible — ej: '10 clientes pagos en Q3 2026']"
+  mercado: "[País / región / industria]"
+  fase_actual: H1
+  actualizado: "[FECHA]"
+
+# ─── HITOS ────────────────────────────────────────────────────────────────────
+# Un hito = conjunto de épicas que juntas entregan un resultado de negocio.
+# Gate = criterio objetivo de "terminado" — verificable sin ambigüedad.
+
+hitos:
+  - id: H0
+    nombre: Fundamentos
+    descripcion: "Base técnica y de gobernanza lista para construir encima"
+    estado: pendiente
+    fecha_objetivo: "[FECHA]"
+    epicas: [E01, E02]
+    gate: "Infraestructura funcionando, entorno de dev reproducible, 0 bugs bloqueantes"
+
+  - id: H1
+    nombre: "[Primer hito de negocio — ej: MVP funcionando]"
+    descripcion: "[Qué entrega este hito en términos de valor para el usuario]"
+    estado: pendiente
+    fecha_objetivo: "[FECHA]"
+    epicas: [E03, E04]
+    gate: "[Criterio concreto — ej: 'Un usuario real puede completar el flujo de onboarding']"
+
+  - id: H2
+    nombre: "[Segundo hito — ej: Lanzamiento]"
+    descripcion: "[Qué entrega]"
+    estado: pendiente
+    fecha_objetivo: "[FECHA]"
+    epicas: []
+    gate: "[Criterio]"
+
+  - id: H3
+    nombre: "[Tercer hito — ej: Monetización / Escala]"
+    descripcion: "[Qué entrega]"
+    estado: pendiente
+    fecha_objetivo: "[FECHA]"
+    epicas: []
+    gate: "[Criterio]"
+
+# ─── ÉPICAS ───────────────────────────────────────────────────────────────────
+# Una épica = unidad de trabajo con un objetivo claro, asignable a un agente o dev.
+# Cada épica tiene su archivo de detalle en epicas/ENN-nombre.md
+
+epicas:
+  # --- H0: Fundamentos ---
+  - id: E01
+    nombre: "[Setup de infraestructura / CI/CD / entorno]"
+    hito: H0
+    estado: pendiente
+    prioridad: critica
+    archivo: epicas/E01-setup-infra.md
+    propuesta: null               # PROP-NNN o null si iniciativa directa
+    spec: null                    # openspec/changes/[nombre] cuando exista
+    servicios: [todos]
+    descripcion: "[Qué hace esta épica — una oración]"
+
+  - id: E02
+    nombre: "[Gobernanza — roadmap, agentes, documentación base]"
+    hito: H0
+    estado: pendiente
+    prioridad: alta
+    archivo: epicas/E02-gobernanza.md
+    propuesta: null
+    spec: null
+    descripcion: "[Qué hace esta épica]"
+
+  # --- H1 ---
+  - id: E03
+    nombre: "[Nombre épica core del MVP]"
+    hito: H1
+    estado: pendiente
+    prioridad: critica
+    archivo: epicas/E03-[nombre].md
+    propuesta: PROP-001           # completar con ID real
+    spec: null                    # completar con path cuando se cree la spec
+    servicios: []
+    descripcion: "[Qué hace esta épica]"
+
+  - id: E04
+    nombre: "[Nombre épica]"
+    hito: H1
+    estado: pendiente
+    prioridad: alta
+    archivo: epicas/E04-[nombre].md
+    propuesta: null
+    spec: null
+    servicios: []
+    descripcion: "[Qué hace esta épica]"
