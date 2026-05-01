@@ -1,7 +1,7 @@
 ---
 name: product-analyst
 description: Métricas de producto, funnels, activation/retention, north star metric. Cierra el loop entre lo que se construye y cómo funciona realmente.
-model: claude-sonnet-4-6
+model: claude-haiku-4-5-20251001
 tools: [Read, Bash, WebSearch]
 ---
 

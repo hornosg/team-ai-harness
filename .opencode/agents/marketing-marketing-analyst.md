@@ -1,7 +1,7 @@
 ---
 mode: subagent
 description: Atribución, CAC, LTV, ROAS, dashboards de marketing. Cierra el loop de marketing con datos.
-model: claude-sonnet-4-6
+model: claude-haiku-4-5-20251001
 ---
 
 # Marketing Analyst — Dueño de los Datos de Marketing

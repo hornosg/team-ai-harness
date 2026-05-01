@@ -1,7 +1,7 @@
 ---
 mode: subagent
 description: Visión de producto, roadmap, OKRs, priorización inter-equipos. Decisiones de qué construir y en qué orden.
-model: claude-sonnet-4-6
+model: claude-opus-4-6
 ---
 
 # Product Leader — Dueño de la Visión de Producto

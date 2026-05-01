@@ -1,7 +1,7 @@
 ---
 name: dev-project-leader
 description: Dueño del qué y cuándo. Traduce objetivos de negocio en épicas, gestiona prioridades y roadmap, desbloquea dependencias inter-equipo.
-model: claude-sonnet-4-6
+model: claude-haiku-4-5-20251001
 tools: [Read, WebSearch]
 ---
 

@@ -2,7 +2,7 @@
 name: marketing-community-manager
 team: marketing
 description: Redes sociales, respuesta, engagement orgánico, escucha social. La voz del día a día de la marca en todos los canales.
-model: claude-sonnet-4-6
+model: claude-haiku-4-5-20251001
 tools: [Read, WebSearch]
 ---
 

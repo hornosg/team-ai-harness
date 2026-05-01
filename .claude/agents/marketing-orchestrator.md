@@ -1,7 +1,7 @@
 ---
 name: marketing-orchestrator
 description: Orquestador del equipo de marketing. Rutea pedidos por canal y etapa del funnel: awareness, consideración, conversión, retención.
-model: claude-opus-4-6
+model: claude-haiku-4-5-20251001
 tools: []
 ---
 

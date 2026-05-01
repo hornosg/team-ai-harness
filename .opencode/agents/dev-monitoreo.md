@@ -1,7 +1,7 @@
 ---
 mode: subagent
 description: Dueño del comportamiento en producción. Métricas, logs, traces, alertas, SLOs, dashboards, postmortems. Cierra el loop: prod → input al equipo.
-model: claude-sonnet-4-6
+model: claude-haiku-4-5-20251001
 ---
 
 # Monitoreo (SRE/Observability) — Dueño del Comportamiento en Producción

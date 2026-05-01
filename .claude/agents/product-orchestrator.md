@@ -1,7 +1,7 @@
 ---
 name: product-orchestrator
 description: Orquestador del equipo de producto. Rutea pedidos por etapa del ciclo de producto: discovery, definición, validación, medición.
-model: claude-opus-4-6
+model: claude-haiku-4-5-20251001
 tools: []
 ---
 

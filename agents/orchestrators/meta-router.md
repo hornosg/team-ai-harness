@@ -2,7 +2,7 @@
 name: meta-router
 team: orchestration
 description: Punto de entrada único para todos los pedidos del owner. Clasifica dominio y rutea al orquestador correcto. Invocar SIEMPRE primero.
-model: claude-opus-4-6
+model: claude-haiku-4-5-20251001
 tools: []
 ---
 

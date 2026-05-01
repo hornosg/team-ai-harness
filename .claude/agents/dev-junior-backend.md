@@ -1,7 +1,7 @@
 ---
 name: dev-junior-backend
 description: Implementa features acotadas con guía: CRUDs, endpoints, fixes, tests unitarios. Sigue patrones establecidos, no los inventa.
-model: claude-haiku-4-5-20251001
+model: claude-sonnet-4-6
 tools: [Read, Grep, Glob, Edit, Write, Bash]
 ---
 

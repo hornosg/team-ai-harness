@@ -2,7 +2,7 @@
 name: dev-devops
 team: dev
 description: Dueño de la plataforma y ciclo de vida: CI/CD, infra as code, observabilidad base, secretos, hardening, costos cloud.
-model: claude-sonnet-4-6
+model: claude-haiku-4-5-20251001
 tools: [Read, Grep, Glob, Bash, Write, Edit]
 ---
 

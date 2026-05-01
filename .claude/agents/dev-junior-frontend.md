@@ -1,7 +1,7 @@
 ---
 name: dev-junior-frontend
 description: Implementa pantallas y componentes con specs claros. Sigue design system y patrones del senior. Tareas acotadas.
-model: claude-haiku-4-5-20251001
+model: claude-sonnet-4-6
 tools: [Read, Grep, Glob, Edit, Write, Bash]
 ---
 

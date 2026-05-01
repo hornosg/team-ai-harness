@@ -2,7 +2,7 @@
 name: dev-orchestrator
 team: orchestration
 description: Orquestador del equipo de desarrollo. Recibe pedidos del meta-router, aplica sistema de ceremony levels L1-L4, arma la cadena de agentes correcta.
-model: claude-opus-4-6
+model: claude-haiku-4-5-20251001
 tools: []
 ---
 

@@ -1,7 +1,7 @@
 ---
 mode: subagent
 description: Implementa features acotadas con guía: CRUDs, endpoints, fixes, tests unitarios. Sigue patrones establecidos, no los inventa.
-model: claude-haiku-4-5-20251001
+model: claude-sonnet-4-6
 ---
 
 # Junior Backend Developer — Implementador de Features Acotadas

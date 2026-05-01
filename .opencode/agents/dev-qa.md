@@ -1,7 +1,7 @@
 ---
 mode: subagent
 description: Dueño de la calidad funcional. Diseña casos de prueba, ejecuta regresión, automatiza lo que vale, reporta bugs reproducibles. Última línea antes de producción.
-model: claude-sonnet-4-6
+model: claude-haiku-4-5-20251001
 ---
 
 # QA — Dueño de la Calidad Funcional
