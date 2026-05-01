@@ -15,13 +15,23 @@ Reporte unificado del estado del proyecto. Cruza `roadmap.yaml`, `propuestas/`, 
 
 ## Proceso
 
-### 1. Leer fuentes
+### 1. Leer fuentes (OBLIGATORIO — no asumir, leer)
 
+**Leer primero:**
 ```
 management/roadmap/roadmap.yaml          ← hitos + épicas + estados
 management/roadmap/propuestas/           ← escanear todos los *.md (no _TEMPLATE)
-management/openspec/changes/             ← escanear directorios de specs (si existe)
 ```
+
+**Specs activas — detectar cuál formato usa el proyecto:**
+```
+management/openspec/changes/             ← formato nuevo (OpenSpec)
+management/openspec/cycles/              ← formato viejo (SpecKit) — si existe y no hay changes/
+```
+
+Reportar solo lo que existe en disco. Si no hay specs activas en ninguna de las dos rutas → reportar "Sin specs activas".
+
+**NUNCA usar memoria (Engram, contexto de sesión anterior) como fuente de estado del roadmap.** Los archivos son la única fuente de verdad.
 
 ### 2. Clasificar épicas por estado
 
@@ -39,10 +49,12 @@ management/openspec/changes/             ← escanear directorios de specs (si e
 
 ### 4. Cruzar con specs
 
-Si existe `management/openspec/changes/`:
-- Buscar `tasks.md` en cada subdirectorio
-- Extraer el campo `epic` o el nombre del cambio
-- Linkear spec ↔ épica ↔ propuesta
+Detectar formato activo:
+- Si existe `management/openspec/changes/` → listar subdirectorios con `tasks.md`
+- Si existe `management/openspec/cycles/` (SpecKit) → listar subdirectorios con estado (no _template)
+- Si ninguno existe → omitir sección, no inventar
+
+Linkear spec ↔ épica ↔ propuesta solo si el vínculo está explícito en los archivos.
 
 ### 5. Generar reporte
 
@@ -108,7 +120,9 @@ Si el hito actual está > 80% completo → sugerir: "H[N] casi listo. ¿Revisamo
 
 ## Guardrails
 
-- Solo leer — este skill no modifica nada
-- Si `roadmap.yaml` no existe: reportar "Roadmap no inicializado. Completar management/roadmap/roadmap.yaml"
-- Si `openspec/changes/` no existe: omitir sección de specs (no es error)
+- **Solo leer** — este skill no modifica nada
+- **Si `roadmap.yaml` no existe**: reportar "Roadmap no inicializado. Completar management/roadmap/roadmap.yaml"
+- **Si no hay specs en ninguna ruta**: omitir sección specs — no inventar ciclos ni cambios
+- **NUNCA completar datos desde memoria o inferencia** — si el campo está vacío en el YAML, mostrar "[sin datos]"
 - Mostrar siempre primero lo que requiere acción del owner
+- Si el agente detecta que usó memoria en vez de archivos: parar, releer archivos, regenerar reporte
