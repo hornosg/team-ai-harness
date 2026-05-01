@@ -248,20 +248,20 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 
 # ─── Procesar agentes ────────────────────────────────────────────────────────
 while IFS= read -r -d '' file; do
-  local_name description model tools team body
-  local_name="$(extract_frontmatter "$file" "name")"
+  name="" description="" model="" tools="" team="" body=""
+  name="$(extract_frontmatter "$file" "name")"
   description="$(extract_frontmatter "$file" "description")"
   model="$(extract_frontmatter "$file" "model")"
   tools="$(extract_frontmatter "$file" "tools")"
   team="$(extract_frontmatter "$file" "team")"
   body="$(extract_body "$file")"
 
-  echo -e "${BLUE}→${NC} $local_name ($team)"
+  echo -e "${BLUE}→${NC} $name ($team)"
   for adapter in "${ADAPTERS[@]}"; do
     case "$adapter" in
-      claude)   adapter_claude   "$local_name" "$description" "$model" "$tools" "$body" ;;
-      opencode) adapter_opencode "$local_name" "$description" "$model" "$tools" "$body" ;;
-      copilot)  adapter_copilot  "$local_name" "$description" "$model" "$tools" "$body" ;;
+      claude)   adapter_claude   "$name" "$description" "$model" "$tools" "$body" ;;
+      opencode) adapter_opencode "$name" "$description" "$model" "$tools" "$body" ;;
+      copilot)  adapter_copilot  "$name" "$description" "$model" "$tools" "$body" ;;
     esac
   done
   ((generated++)) || true
