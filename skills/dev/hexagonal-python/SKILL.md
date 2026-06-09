@@ -51,6 +51,8 @@ Infrastructure → Application → Domain
 
 **Domain no importa nada de FastAPI, SQLAlchemy, ni Pydantic.** Solo stdlib + dataclasses.
 
+> **Instrumentación:** exponé métricas con `skills/dev/prometheus/SKILL.md`, logs JSON con `skills/dev/loki/SKILL.md` y traces con `skills/dev/tracing/SKILL.md` desde la capa `infrastructure` (middleware), nunca desde el dominio.
+
 ## Patrones por layer
 
 ### Domain — Aggregate Root

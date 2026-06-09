@@ -1,6 +1,6 @@
 ---
 name: hexagonal-flutter
-description: Guía de Clean Architecture (hexagonal adaptada) + DDD para Flutter. Estructura de features, naming conventions, BLoC/Riverpod, repository pattern, testing. Invocar al planificar o revisar apps Flutter.
+description: Guía de Clean Architecture (hexagonal adaptada) + DDD para Flutter con flutter_bloc (BLoC + Cubit). Estructura de features, naming conventions, repository pattern, testing. Invocar al planificar o revisar apps Flutter.
 ---
 
 # Clean Architecture + DDD — Flutter
@@ -45,7 +45,7 @@ lib/
 │       │   └── repository/
 │       │       └── order_repository_impl.dart    ← Implementa domain port
 │       └── presentation/
-│           ├── bloc/                 ← o cubit/ o notifier/ (Riverpod)
+│           ├── bloc/                 ← BLoC para flows complejos; cubit/ para estado simple
 │           │   ├── order_bloc.dart
 │           │   ├── order_event.dart
 │           │   └── order_state.dart
@@ -406,7 +406,7 @@ void main() {
 
 | Concern | Library |
 |---------|---------|
-| State management | [flutter_bloc](https://pub.dev/packages/flutter_bloc) (BLoC/Cubit) o [Riverpod](https://pub.dev/packages/riverpod) |
+| State management | **[flutter_bloc](https://pub.dev/packages/flutter_bloc)** (stack actual) — Cubit para estado simple, BLoC para flows complejos |
 | Functional errors | [dartz](https://pub.dev/packages/dartz) — `Either<Failure, T>` |
 | Equatable | [equatable](https://pub.dev/packages/equatable) — value equality en entities |
 | HTTP client | [dio](https://pub.dev/packages/dio) con interceptors |
@@ -416,32 +416,40 @@ void main() {
 | JSON | `fromJson/toJson` manual en models (o [freezed](https://pub.dev/packages/freezed) para boilerplate) |
 | Navigation | [go_router](https://pub.dev/packages/go_router) |
 
-## Riverpod alternative (sin BLoC)
+## Cubit — estado simple (sin eventos)
+
+Para estado simple (un toggle, un fetch directo, un form) usá **Cubit**: menos boilerplate que BLoC, sin clases de evento. El estado se reusa tal cual (`OrderState`).
 
 ```dart
-// Usando Riverpod + AsyncNotifier (Flutter 3.x)
-@riverpod
-class OrderNotifier extends _$OrderNotifier {
-  @override
-  AsyncValue<Order?> build() => const AsyncValue.data(null);
+// lib/features/order/presentation/cubit/order_cubit.dart
+import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../domain/usecase/place_order.dart';
+import 'order_state.dart';
 
-  Future<void> placeOrder(PlaceOrderParams params) async {
-    state = const AsyncValue.loading();
-    final result = await ref.read(placeOrderProvider).call(params);
-    state = result.fold(
-      (failure) => AsyncValue.error(failure, StackTrace.current),
-      (order) => AsyncValue.data(order),
+class OrderCubit extends Cubit<OrderState> {
+  final PlaceOrder placeOrder;
+
+  OrderCubit({required this.placeOrder}) : super(OrderInitial());
+
+  Future<void> submit(PlaceOrderParams params) async {
+    emit(OrderLoading());
+    final result = await placeOrder(params); // mismo use case del dominio
+    result.fold(
+      (failure) => emit(OrderError(failure.message)),
+      (order) => emit(OrderSuccess(order)),
     );
   }
 }
 ```
+
+**Regla BLoC vs Cubit:** Cubit por defecto (más simple). Subí a **BLoC** cuando necesites eventos explícitos, *transformers* (debounce/throttle de inputs), o un audit trail de qué disparó cada cambio de estado. La capa de dominio/data no cambia: ambos consumen los mismos `UseCase`.
 
 ## Reglas de oro — Flutter
 
 - **Domain = Dart puro** — cero imports de Flutter (material, widgets), cero JSON
 - **`Either<Failure, T>`** en repository ports — nunca throw en dominio
 - **Models en data layer** — extienden entities del dominio, agregan `fromJson`/`toJson`
-- **Un BLoC/Notifier por feature** — no un BLoC global para todo
+- **Un BLoC/Cubit por feature** — no uno global para todo; Cubit por defecto, BLoC cuando se justifica
 - **`Equatable`** en entities y states — evita rebuilds innecesarios
 - **`const` constructors** donde sea posible — performance
 - **Tests de BLoC con `bloc_test`** — `blocTest()` para flujos completos

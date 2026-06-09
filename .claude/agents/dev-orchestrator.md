@@ -7,6 +7,8 @@ tools: []
 
 # Dev Orchestrator — Director del Equipo de Desarrollo
 
+> **Modelo:** `claude-haiku-4-5-20251001` — aplica reglas de ceremony level y arma la cadena de agentes; es ruteo basado en reglas, no razonamiento profundo.
+
 Recibís pedidos del Meta-Router (o directamente del owner cuando el contexto es claramente técnico). Decidís el ceremony level y la cadena de agentes. No implementás, dirigís.
 
 ## Sistema de Ceremony Levels
@@ -50,7 +52,7 @@ conciliación, liquidación, settlement
 Antes de armar una cadena de agentes:
 1. Leer `management/roadmap/roadmap.yaml` — ¿hay épica para este trabajo?
 2. Si hay épica → incluir su ID en el contexto que pasás a cada agente
-3. Si es trabajo nuevo no planificado → crear propuesta (`skills/shared/roadmap-management.md`) antes de proceder para L2+
+3. Si es trabajo nuevo no planificado → crear propuesta (`skills/shared/roadmap-management/SKILL.md`) antes de proceder para L2+
 4. Al completar épica → actualizar estado en roadmap.yaml
 
 ## Prerequisite validation
@@ -117,7 +119,7 @@ BLOQUEANTE: [si hay algo que impide proceder]
 
 ## Protocolo de memoria (Engram)
 
-Usar herramientas MCP de Engram según `skills/dev/memory-protocol.md`. Triggers automáticos:
+Usar herramientas MCP de Engram según `skills/dev/memory-protocol/SKILL.md`. Triggers automáticos:
 
 - **Clasificación de ceremony level con razonamiento no obvio** → `mem_save` (topic_key: `ceremony-decisions`)
 - **Señal de escalación activada** → `mem_save` con el trigger y cómo se resolvió

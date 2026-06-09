@@ -227,10 +227,11 @@ team-ai-harness/
 │   ├── dev/                       ← 11 dev agents
 │   ├── product/                   ← 7 product agents
 │   └── marketing/                 ← 10 marketing agents
-├── skills/
-│   ├── dev/                       ← planner, code-reviewer, owasp-top10, memory-protocol, ...
-│   ├── marketing/                 ← market-audit, market-seo, market-copy, ...
-│   └── shared/                    ← bmad-*, roadmap-management, roadmap-status
+├── skills/                        ← cada skill es un directorio con SKILL.md
+│   ├── dev/                       ← code-reviewer/, planner/, owasp-top10/, hexagonal-{go,python,flutter}/,
+│   │                                 kong/, prometheus/, grafana/, loki/, tracing/, observability-stack/, digital-ocean/, ...
+│   ├── marketing/                 ← market-audit/, market-seo/, market-copy/, ...
+│   └── shared/                    ← bmad-*/, roadmap-management/, roadmap-status/
 ├── rules/                         ← architecture, api-standards, security (adapter-ready)
 ├── adapters/                      ← format transforms per AI tool
 ├── roadmap/
@@ -275,11 +276,16 @@ team-ai-harness/
 | Shared | `bmad-review-adversarial` | Cynical reviewer, minimum 10 findings |
 | Shared | `roadmap-management` | Create proposals, epics, update roadmap |
 | Shared | `roadmap-status` | Full status report: roadmap + proposals + specs |
-| Hexagonal | `hexagonal-go` | Hexagonal + DDD patterns for Go (Chi/pgx/Wire) |
-| Hexagonal | `hexagonal-python` | Hexagonal + DDD patterns for Python (FastAPI/SQLAlchemy async) |
-| Hexagonal | `hexagonal-flutter` | Clean Architecture + DDD patterns for Flutter (BLoC/Riverpod) |
-| Hexagonal | `hexagonal-node` | Hexagonal + DDD patterns for Node.js/TypeScript (NestJS/Zod) |
-| Hexagonal | `hexagonal-java-springboot` | Hexagonal + DDD patterns for Java (Spring Boot 3.x/MapStruct/ArchUnit) |
+| Hexagonal | `hexagonal-go` | Hexagonal + DDD para Go (Chi/pgx/Wire) |
+| Hexagonal | `hexagonal-python` | Hexagonal + DDD para Python (FastAPI/SQLAlchemy async) |
+| Hexagonal | `hexagonal-flutter` | Clean Architecture + DDD para Flutter (BLoC/Riverpod) |
+| Stack | `kong` | API Gateway: routing declarativo (decK), plugins, DB-less, seguridad del borde |
+| Stack | `prometheus` | Métricas, golden signals, PromQL, alerting |
+| Stack | `grafana` | Dashboards, SLOs, dashboards-as-code, correlación de señales |
+| Stack | `loki` | Logging estructurado (JSON), LogQL, pipeline de ingestión |
+| Stack | `observability-stack` | Visión integral Prometheus + Grafana + Loki; flujo de diagnóstico |
+| Stack | `tracing` | Tracing distribuido: OpenTelemetry + Grafana Tempo, propagación W3C |
+| Stack | `digital-ocean` | Deploy e infra: App Platform/Droplets, doctl, VPC, managed DB, Spaces, costos |
 
 ---
 
@@ -316,7 +322,7 @@ Agent runtime by [Anthropic](https://anthropic.com). The `.claude/agents/` forma
 Contributions welcome. A few conventions to keep the harness portable:
 
 - **No project-specific content in agents** — agents must work for any project. Project identity lives in `PROJECT.md`, not in agent files.
-- **Skills are documents, not commands** — skills live in `skills/` and are read by agents. They don't go in `.claude/commands/`.
+- **Skills are documents, not commands** — skills live in `skills/<name>/SKILL.md` and are read by agents. They don't go in `.claude/commands/`.
 - **Canonical source in `agents/`** — never edit generated files in `.claude/agents/` or `.opencode/agents/` directly.
 - **L4 is non-negotiable** — don't add exceptions or workarounds for money/auth/compliance ceremony requirements.
 

@@ -97,8 +97,8 @@ done
 step "Copiando skills"
 for dir in dev marketing shared; do
   if [[ -d "$SOURCE/skills/$dir" ]]; then
-    cp "$SOURCE/skills/$dir/"*.md "$MGMT_DIR/skills/$dir/" 2>/dev/null || true
-    count=$(ls "$MGMT_DIR/skills/$dir/"*.md 2>/dev/null | wc -l | tr -d ' ')
+    cp -R "$SOURCE/skills/$dir/." "$MGMT_DIR/skills/$dir/" 2>/dev/null || true
+    count=$(find "$MGMT_DIR/skills/$dir" -name SKILL.md 2>/dev/null | wc -l | tr -d ' ')
     ok "$dir/ → $count skills"
   fi
 done
@@ -390,7 +390,7 @@ El sync-agents.sh genera formatos para múltiples herramientas:
 ## Memoria persistente (Engram)
 
 Agentes Opus/Sonnet guardan decisiones entre sesiones via Engram MCP.
-Ver `management/skills/dev/memory-protocol.md`.
+Ver `management/skills/dev/memory-protocol/SKILL.md`.
 CLAUDE_EOF
   ok "management/CLAUDE.md"
 fi

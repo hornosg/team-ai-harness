@@ -1,6 +1,6 @@
 ---
 name: hexagonal-go
-description: Guía de arquitectura hexagonal + DDD para Go. Estructura de carpetas, naming conventions, patrones de dominio, implementación por layer, testing. Invocar al planificar o revisar servicios Go.
+description: Guía de arquitectura hexagonal + DDD para Go con Gin + pgx. Estructura de carpetas, naming conventions, patrones de dominio, implementación por layer, testing. Invocar al planificar o revisar servicios Go.
 ---
 
 # Hexagonal Architecture + DDD — Go
@@ -26,7 +26,7 @@ service-name/
 │   ├── infrastructure/
 │   │   ├── persistence/         ← Repository implementations (pgx, sqlc, gorm)
 │   │   ├── http/
-│   │   │   ├── handler/         ← HTTP handlers (Chi, Gin, Echo)
+│   │   │   ├── handler/         ← HTTP handlers (Gin) — solo traducen HTTP <-> DTO
 │   │   │   ├── middleware/      ← Auth, logging, trace
 │   │   │   └── router.go
 │   │   ├── client/              ← Clientes de servicios externos
@@ -272,35 +272,64 @@ func (r *PgOrderRepository) Save(ctx context.Context, order *model.Order) error 
 package handler
 
 import (
-    "encoding/json"
+    "errors"
     "net/http"
+
+    "github.com/gin-gonic/gin"
     "myservice/internal/application/dto"
     "myservice/internal/application/usecase"
+    "myservice/internal/domain/model"
 )
 
 type OrderHandler struct {
     placeOrder *usecase.PlaceOrder
 }
 
-func (h *OrderHandler) PlaceOrder(w http.ResponseWriter, r *http.Request) {
+func NewOrderHandler(placeOrder *usecase.PlaceOrder) *OrderHandler {
+    return &OrderHandler{placeOrder: placeOrder}
+}
+
+// El handler recibe *gin.Context pero NO arrastra Gin hacia application/domain:
+// traduce HTTP -> DTO, invoca el use case, mapea el resultado a HTTP.
+func (h *OrderHandler) PlaceOrder(c *gin.Context) {
     var req dto.PlaceOrderRequest
-    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-        http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
+    if err := c.ShouldBindJSON(&req); err != nil { // validación con binding tags del DTO
+        c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
         return
     }
 
-    resp, err := h.placeOrder.Execute(r.Context(), req)
+    resp, err := h.placeOrder.Execute(c.Request.Context(), req) // propaga el context (trace)
     if err != nil {
-        // Mapear domain errors a HTTP status
-        writeError(w, err)
+        writeError(c, err)
         return
     }
 
-    w.Header().Set("Content-Type", "application/json")
-    w.WriteHeader(http.StatusCreated)
-    json.NewEncoder(w).Encode(resp)
+    c.JSON(http.StatusCreated, resp)
+}
+
+// writeError centraliza el mapeo de errores de dominio -> HTTP status.
+func writeError(c *gin.Context, err error) {
+    switch {
+    case errors.Is(err, model.ErrInvalidTotal):
+        c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
+    case errors.Is(err, model.ErrOrderAlreadyProcessed):
+        c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+    default:
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+    }
 }
 ```
+
+> **Validación en el borde con binding tags** — el DTO de request lleva las tags de Gin/validator; el dominio nunca recibe datos sin validar:
+>
+> ```go
+> // internal/application/dto/place_order.go
+> type PlaceOrderRequest struct {
+>     CustomerID uuid.UUID `json:"customer_id" binding:"required"`
+>     TotalCents int64     `json:"total_cents" binding:"required,gt=0"`
+>     Currency   string    `json:"currency"    binding:"required,len=3"`
+> }
+> ```
 
 ## Inyección de dependencias
 
@@ -321,12 +350,18 @@ func main() {
     // Infrastructure HTTP
     orderHandler := handler.NewOrderHandler(placeOrder)
 
-    // Router
-    r := chi.NewRouter()
-    r.Use(middleware.Logger, middleware.TraceID)
-    r.Post("/orders", orderHandler.PlaceOrder)
+    // Router (Gin)
+    r := gin.New()
+    r.Use(
+        gin.Recovery(),
+        middleware.RequestID(),  // propaga X-Request-Id de Kong como correlation_id
+        middleware.Logger(),     // log estructurado JSON (ver skill loki)
+        middleware.Otel(),       // tracing OpenTelemetry (ver skill tracing)
+    )
+    v1 := r.Group("/api/v1")
+    v1.POST("/orders", orderHandler.PlaceOrder)
 
-    http.ListenAndServe(":8080", r)
+    r.Run(":8080")
 }
 ```
 
@@ -385,12 +420,12 @@ func TestPlaceOrder_Execute_HappyPath(t *testing.T) {
 
 | Concern | Library |
 |---------|---------|
-| HTTP router | [Chi](https://github.com/go-chi/chi) (lightweight) o [Gin](https://github.com/gin-gonic/gin) |
-| DB driver | [pgx/v5](https://github.com/jackc/pgx) + [sqlc](https://sqlc.dev) para queries type-safe |
+| HTTP framework | **[Gin](https://github.com/gin-gonic/gin)** (stack actual) — `ShouldBindJSON` + `binding` tags para validación |
+| DB driver | **[pgx/v5](https://github.com/jackc/pgx)** (stack actual) — `pgxpool` + queries explícitas; sqlc opcional para type-safety generada |
 | DI | [Wire](https://github.com/google/wire) o manual para servicios pequeños |
 | Mocks | [testify/mock](https://github.com/stretchr/testify) + [mockery](https://github.com/vektra/mockery) |
 | Config | [viper](https://github.com/spf13/viper) o `os.Getenv` para 12-factor |
-| Validation | [go-playground/validator](https://github.com/go-playground/validator) en DTOs |
+| Validation | [go-playground/validator](https://github.com/go-playground/validator) — integrado en Gin vía `binding` tags del DTO |
 | UUID | [google/uuid](https://github.com/google/uuid) |
 | Migrations | [golang-migrate](https://github.com/golang-migrate/migrate) |
 
@@ -402,5 +437,6 @@ func TestPlaceOrder_Execute_HappyPath(t *testing.T) {
 - **Errores como valores**, no panics — `errors.Is` / `errors.As` para wrapping
 - **Structs no exportados** en dominio — exponer solo getters
 - **Una transacción por use case** — el use case coordina, no la entidad
-- **sqlc sobre ORM** — queries explícitas, type-safe, sin magic
+- **pgx con queries explícitas, no ORM** — control total del SQL; sqlc opcional si querés type-safety generada
+- **Gin solo en `infrastructure/http`** — `*gin.Context` nunca cruza a `application`/`domain`; el handler traduce y delega
 - **`go vet` + `staticcheck` + `golangci-lint`** en CI

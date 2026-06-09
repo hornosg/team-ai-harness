@@ -76,6 +76,20 @@ El meta-router clasifica, decide el ceremony level (dev), y arma la cadena de ag
 | `marketing-community-manager` | Redes, respuestas, escucha social |
 | `marketing-marketing-analyst` | Atribución, CAC, LTV, ROAS |
 
+## Modelos por agente
+
+Cada agente declara su modelo en el frontmatter (`model:`) y justifica la elección en una línea al inicio de su cuerpo (`> **Modelo:** ...`). Política: el modelo **necesario**, ni sub- ni sobredimensionado.
+
+| Modelo | Cuándo | Agentes |
+|--------|--------|---------|
+| `claude-opus-4-8` | Razonamiento profundo, decisiones casi irreversibles, blast radius máximo | `dev-architect`, `dev-security` |
+| `claude-sonnet-4-6` | Código real, análisis, escritura de alto impacto, juicio técnico/estratégico | todos los seniors, leaders, TL, `dev-devops`, `dev-qa`, `dev-monitoreo`, analysts, strategists, owners, copywriters/creatives senior, juniors que escriben código (`dev-junior-backend`, `dev-junior-frontend`) |
+| `claude-haiku-4-5-20251001` | Clasificación/ruteo, tareas acotadas Read-only, alto volumen y baja complejidad | `meta-router`, los 3 orchestrators, `product-junior-designer`, `marketing-junior-copywriter`, `marketing-junior-designer`, `marketing-community-manager` |
+
+**Criterio:** los juniors que **escriben código** usan sonnet (haiku sub-rendiría en código, con red de seguridad de senior+TL); los juniors de diseño/copy de bajo riesgo usan haiku. `dev-devops`, `dev-qa`, `dev-monitoreo` y los analysts subieron de haiku a sonnet porque IaC, diseño de tests, PromQL/LogQL/SLOs y análisis cuantitativo exigen razonamiento. `product-leader` bajó de opus a sonnet: visión y OKRs son juicio estratégico, no profundidad de arquitectura.
+
+`sync-agents.sh` valida que todo `model:` esté en la allowlist vigente y avisa si encuentra un string desconocido.
+
 ## Flujo de Documentos
 
 Quién genera qué. Cada documento tiene un dueño único.
@@ -130,7 +144,7 @@ Owner
   │
   ▼
 [technical-leader]
-  code review 7 dimensiones (skills/dev/code-reviewer.md)
+  code review 7 dimensiones (skills/dev/code-reviewer/SKILL.md)
   D1: FILE-IDs creados según plan
   D3: TEST-IDs implementados
   D4: layer boundaries respetados
@@ -138,7 +152,7 @@ Owner
   Score /35 → APPROVED ≥30 | REVISIONS <25
   │
   └─ L4 → [security]
-             OWASP Gate (skills/dev/owasp-top10.md)
+             OWASP Gate (skills/dev/owasp-top10/SKILL.md)
              contract boundaries
              threat model validado
              │

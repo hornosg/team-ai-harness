@@ -17,7 +17,7 @@ Cada adapter transforma los assets canónicos de `management/` al formato nativo
 |---------------|-------------|--------|---------|
 | `management/agents/*.md` | `.claude/agents/*.md` (frontmatter: name/description/model/tools) | N/A | `.github/agents/*.agent.md` (frontmatter: name/description/model) |
 | `management/rules/*.md` | vía `@management/CLAUDE.md` | `.cursor/rules/*.mdc` (frontmatter: description/globs/alwaysApply) | `.github/instructions/*.instructions.md` (frontmatter: applyTo) |
-| `management/skills/*.md` | vía `@management/CLAUDE.md` | `.cursor/rules/skills/*.mdc` | vía copilot-instructions.md |
+| `management/skills/<name>/SKILL.md` | vía `@management/CLAUDE.md` | `.cursor/rules/skills/*.mdc` | vía copilot-instructions.md |
 
 ## Activar adapters
 
@@ -36,7 +36,7 @@ Output: `.claude/agents/[name].md`
 ---
 name: dev-architect
 description: [description]
-model: claude-opus-4-6
+model: claude-opus-4-8
 tools: [Read, Grep, Glob]
 ---
 [body]
@@ -50,7 +50,7 @@ Output: `.opencode/agents/[name].md`
 ---
 mode: subagent
 description: [description]
-model: claude-opus-4-6
+model: claude-opus-4-8
 ---
 [body]
 ```

@@ -60,6 +60,12 @@ process_agent() {
   tools="$(extract_frontmatter "$canonical_file" "tools")"
   team="$(extract_frontmatter "$canonical_file" "team")"
 
+  # Validación: el modelo debe estar en la allowlist de modelos vigentes
+  case "$model" in
+    claude-opus-4-8|claude-sonnet-4-6|claude-haiku-4-5-20251001) ;;
+    *) echo -e "  ${YELLOW}⚠ Modelo no reconocido:${NC} '$model' en $name — revisar frontmatter (esperado: claude-opus-4-8 | claude-sonnet-4-6 | claude-haiku-4-5-20251001)";;
+  esac
+
   local body
   body="$(extract_body "$canonical_file")"
 
