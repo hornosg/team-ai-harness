@@ -89,6 +89,8 @@ span.SetAttributes(attribute.String("order.id", order.ID().String()))
 
 > El `ctx` ya se propaga porque hexagonal-go pasa `context.Context` como primer parámetro en todo lo que toca I/O. Esa regla es lo que hace el tracing trivial.
 
+> **DB con `database/sql`**: envolvé el driver con [`otelsql`](https://github.com/XSAM/otelsql) para spans automáticos de cada query (`otelsql.Open("postgres", dsn, ...)`), además de los spans manuales en operaciones clave.
+
 ## Instrumentación — Python (FastAPI)
 
 ```python

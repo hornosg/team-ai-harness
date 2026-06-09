@@ -20,7 +20,7 @@ lib/
 │   ├── network/
 │   │   └── network_info.dart         ← Port: ¿hay conectividad?
 │   └── injection/
-│       └── injection_container.dart  ← get_it / riverpod providers
+│       └── injection_container.dart  ← get_it + injectable (DI)
 │
 ├── features/
 │   └── order/                        ← Feature = bounded context
@@ -74,7 +74,7 @@ test/
 ```
 Presentation → Domain ← Data
      ↓              ↑
-  BLoC/Notifier   Repository
+  BLoC / Cubit    Repository
   usa UseCases    implementa abstract del dominio
 ```
 

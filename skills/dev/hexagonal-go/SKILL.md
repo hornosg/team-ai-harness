@@ -1,6 +1,6 @@
 ---
 name: hexagonal-go
-description: Guía de arquitectura hexagonal + DDD para Go con Gin + pgx. Estructura de carpetas, naming conventions, patrones de dominio, implementación por layer, testing. Invocar al planificar o revisar servicios Go.
+description: Guía de arquitectura hexagonal + DDD para Go con Gin + database/sql (lib/pq, raw SQL). Estructura de carpetas, naming conventions, patrones de dominio, implementación por layer, testing. Invocar al planificar o revisar servicios Go.
 ---
 
 # Hexagonal Architecture + DDD — Go
@@ -24,7 +24,7 @@ service-name/
 │   │   ├── dto/                 ← Request/Response structs
 │   │   └── port/                ← Driven ports (interfaces de servicios externos)
 │   ├── infrastructure/
-│   │   ├── persistence/         ← Repository implementations (pgx, sqlc, gorm)
+│   │   ├── persistence/         ← Repository implementations (database/sql + lib/pq, raw SQL)
 │   │   ├── http/
 │   │   │   ├── handler/         ← HTTP handlers (Gin) — solo traducen HTTP <-> DTO
 │   │   │   ├── middleware/      ← Auth, logging, trace
@@ -239,22 +239,25 @@ package persistence
 
 import (
     "context"
-    "github.com/jackc/pgx/v5/pgxpool"
+    "database/sql"
+
+    "github.com/google/uuid"
+    _ "github.com/lib/pq" // driver Postgres: registra "postgres"
     "myservice/internal/domain/model"
     "myservice/internal/domain/repository"
 )
 
-// Adapter: implementa el port del dominio
+// Adapter: implementa el port del dominio con database/sql + raw SQL (sin ORM)
 type PgOrderRepository struct {
-    db *pgxpool.Pool
+    db *sql.DB
 }
 
-func NewPgOrderRepository(db *pgxpool.Pool) repository.OrderRepository {
+func NewPgOrderRepository(db *sql.DB) repository.OrderRepository {
     return &PgOrderRepository{db: db}
 }
 
 func (r *PgOrderRepository) Save(ctx context.Context, order *model.Order) error {
-    _, err := r.db.Exec(ctx,
+    _, err := r.db.ExecContext(ctx,
         `INSERT INTO orders (id, customer_id, total_cents, currency, status, created_at)
          VALUES ($1, $2, $3, $4, $5, $6)
          ON CONFLICT (id) DO UPDATE SET status = $5`,
@@ -262,6 +265,16 @@ func (r *PgOrderRepository) Save(ctx context.Context, order *model.Order) error 
         order.Total().Currency(), order.Status(), order.CreatedAt(),
     )
     return err
+}
+
+// Lecturas: QueryContext + Scan manual hacia el modelo de dominio.
+func (r *PgOrderRepository) FindByID(ctx context.Context, id uuid.UUID) (*model.Order, error) {
+    row := r.db.QueryRowContext(ctx,
+        `SELECT id, customer_id, total_cents, currency, status, created_at
+         FROM orders WHERE id = $1`, id)
+    // ... row.Scan(&...) y reconstrucción del aggregate vía constructor del dominio
+    _ = row
+    return nil, nil
 }
 ```
 
@@ -333,12 +346,17 @@ func writeError(c *gin.Context, err error) {
 
 ## Inyección de dependencias
 
-Usar [Wire](https://github.com/google/wire) o [Fx](https://github.com/uber-go/fx). Manual para proyectos pequeños.
+Wiring **manual en la configuración del módulo** (sin framework de DI): construís los adapters y los inyectás hacia arriba en `main.go`.
 
 ```go
-// cmd/api/main.go — wire manual
+// cmd/api/main.go — wire manual (imports: database/sql, os, log, gin, ...)
 func main() {
-    db := mustConnectDB()
+    db, err := sql.Open("postgres", os.Getenv("DATABASE_URL")) // lib/pq
+    if err != nil {
+        log.Fatal(err)
+    }
+    db.SetMaxOpenConns(25)
+    db.SetMaxIdleConns(5)
 
     // Infrastructure
     orderRepo := persistence.NewPgOrderRepository(db)
@@ -421,13 +439,13 @@ func TestPlaceOrder_Execute_HappyPath(t *testing.T) {
 | Concern | Library |
 |---------|---------|
 | HTTP framework | **[Gin](https://github.com/gin-gonic/gin)** (stack actual) — `ShouldBindJSON` + `binding` tags para validación |
-| DB driver | **[pgx/v5](https://github.com/jackc/pgx)** (stack actual) — `pgxpool` + queries explícitas; sqlc opcional para type-safety generada |
-| DI | [Wire](https://github.com/google/wire) o manual para servicios pequeños |
+| Persistencia | **`database/sql` + [lib/pq](https://github.com/lib/pq)** (stack actual) — raw SQL, placeholders `$1`, `Scan` manual; sin ORM ni query builder |
+| DI | **Manual** en la config del módulo (sin framework) |
 | Mocks | [testify/mock](https://github.com/stretchr/testify) + [mockery](https://github.com/vektra/mockery) |
 | Config | [viper](https://github.com/spf13/viper) o `os.Getenv` para 12-factor |
 | Validation | [go-playground/validator](https://github.com/go-playground/validator) — integrado en Gin vía `binding` tags del DTO |
 | UUID | [google/uuid](https://github.com/google/uuid) |
-| Migrations | [golang-migrate](https://github.com/golang-migrate/migrate) |
+| Migrations | **Archivos SQL propios** versionados en `migrations/` |
 
 ## Reglas de oro — Go
 
@@ -437,6 +455,9 @@ func TestPlaceOrder_Execute_HappyPath(t *testing.T) {
 - **Errores como valores**, no panics — `errors.Is` / `errors.As` para wrapping
 - **Structs no exportados** en dominio — exponer solo getters
 - **Una transacción por use case** — el use case coordina, no la entidad
-- **pgx con queries explícitas, no ORM** — control total del SQL; sqlc opcional si querés type-safety generada
+- **`database/sql` + `lib/pq`, raw SQL — sin ORM ni query builder**: control total del SQL, mapeo manual `Rows.Scan` → modelo de dominio
+- **Migraciones como archivos SQL propios** en `migrations/`, versionadas y aplicadas en orden
+- **Go es síncrono** — sin async/await; usá goroutines solo cuando la concurrencia aporta de verdad
+- **DI manual** — sin framework; los adapters se construyen e inyectan en `main.go`
 - **Gin solo en `infrastructure/http`** — `*gin.Context` nunca cruza a `application`/`domain`; el handler traduce y delega
 - **`go vet` + `staticcheck` + `golangci-lint`** en CI

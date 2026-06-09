@@ -1,6 +1,6 @@
 ---
 name: hexagonal-python
-description: Guía de arquitectura hexagonal + DDD para Python (FastAPI + SQLAlchemy 2.0 async). Estructura de carpetas, naming conventions, patrones de dominio, implementación por layer, testing. Invocar al planificar o revisar servicios Python.
+description: Guía de arquitectura hexagonal + DDD para el AI service en Python (FastAPI + Uvicorn, SQLAlchemy 2.0 async con asyncpg, pgvector para embeddings, Alembic, Redis, dependency-injector). Estructura de carpetas, naming conventions, patrones de dominio, implementación por layer, testing. Invocar al planificar o revisar servicios Python.
 ---
 
 # Hexagonal Architecture + DDD — Python (FastAPI)
@@ -380,6 +380,79 @@ async def test_place_order_returns_created_order():
     mock_repo.save.assert_called_once()
 ```
 
+## Embeddings y caché (AI service)
+
+Este servicio es de IA: persiste **embeddings** con pgvector y usa **Redis** como caché. Ambos viven en `infrastructure`, detrás de ports del dominio — el caso de uso nunca conoce ni pgvector ni Redis.
+
+```python
+# infrastructure/persistence/document_orm.py — pgvector como columna del modelo de infra
+import uuid
+from pgvector.sqlalchemy import Vector
+from sqlalchemy.orm import Mapped, mapped_column
+from .base import Base
+
+class DocumentORM(Base):
+    __tablename__ = "documents"
+    id:        Mapped[uuid.UUID] = mapped_column(primary_key=True)
+    content:   Mapped[str]
+    embedding: Mapped[list[float]] = mapped_column(Vector(1536))  # dim del modelo de embeddings
+
+# Búsqueda por similitud (cosine) — query explícita en el repository:
+# stmt = select(DocumentORM).order_by(DocumentORM.embedding.cosine_distance(q)).limit(k)
+```
+
+```python
+# domain/port/cache.py — el DOMINIO define el port, no conoce Redis
+from typing import Protocol
+
+class Cache(Protocol):
+    async def get(self, key: str) -> bytes | None: ...
+    async def set(self, key: str, value: bytes, ttl_s: int) -> None: ...
+```
+
+```python
+# infrastructure/cache/redis_cache.py — adapter (redis-py async)
+import redis.asyncio as redis
+
+class RedisCache:  # implementa el port Cache
+    def __init__(self, client: redis.Redis) -> None:
+        self._c = client
+    async def get(self, key: str) -> bytes | None:
+        return await self._c.get(key)
+    async def set(self, key: str, value: bytes, ttl_s: int) -> None:
+        await self._c.set(key, value, ex=ttl_s)
+```
+
+> Regla: el caso de uso depende del port `Cache`. Que sea Redis es un detalle de infraestructura intercambiable.
+
+## Inyección de dependencias — dependency-injector
+
+El wiring se centraliza en un **container** de [dependency-injector](https://python-dependency-injector.ets-labs.org); FastAPI `Depends` es el puente al endpoint.
+
+```python
+# infrastructure/di/container.py
+from dependency_injector import containers, providers
+
+class Container(containers.DeclarativeContainer):
+    config       = providers.Configuration()
+    engine       = providers.Singleton(create_async_engine, config.db_url)
+    session      = providers.Factory(AsyncSession, bind=engine)   # por request
+    cache        = providers.Singleton(RedisCache, client=providers.Singleton(redis.from_url, config.redis_url))
+    doc_repo     = providers.Factory(SaDocumentRepository, session=session)
+    embed_doc_uc = providers.Factory(EmbedDocument, repo=doc_repo, cache=cache)
+```
+
+```python
+# infrastructure/web/dependency.py — puente container -> FastAPI
+from dependency_injector.wiring import Provide, inject
+
+@inject
+async def get_embed_uc(uc: EmbedDocument = Depends(Provide[Container.embed_doc_uc])) -> EmbedDocument:
+    return uc
+```
+
+> El container declara *cómo* se construye cada cosa; los endpoints sólo piden el use case por `Depends`. El dominio sigue sin saber de FastAPI ni del container.
+
 ## Stack recomendado
 
 | Concern | Library |
@@ -387,8 +460,12 @@ async def test_place_order_returns_created_order():
 | HTTP framework | [FastAPI](https://fastapi.tiangolo.com) |
 | Validation / DTOs | [Pydantic v2](https://docs.pydantic.dev/latest/) |
 | ORM (infra) | [SQLAlchemy 2.0 async](https://docs.sqlalchemy.org/en/20/) |
-| DB driver | [asyncpg](https://github.com/MagicStack/asyncpg) (PostgreSQL) |
+| DB driver | [asyncpg](https://github.com/MagicStack/asyncpg) — driver Postgres nativo async (`postgresql+asyncpg://`) |
+| Embeddings | [pgvector](https://github.com/pgvector/pgvector) — vectores en Postgres, búsqueda por similitud |
+| Caché | [Redis](https://redis.io) (redis-py async) — detrás de un port del dominio |
 | Migrations | [Alembic](https://alembic.sqlalchemy.org) |
+| DI | [dependency-injector](https://python-dependency-injector.ets-labs.org) — container de providers; `Depends` como puente |
+| ASGI server | [Uvicorn](https://www.uvicorn.org) |
 | Testing | [pytest](https://pytest.org) + [pytest-asyncio](https://github.com/pytest-dev/pytest-asyncio) |
 | Config | [pydantic-settings](https://docs.pydantic.dev/latest/concepts/pydantic_settings/) |
 | HTTP client | [httpx](https://www.python-httpx.org) (async) |
@@ -402,4 +479,8 @@ async def test_place_order_returns_created_order():
 - **`ABC + @abstractmethod`** para ports — falla en runtime si no se implementa
 - **Un `AsyncSession` por request** — FastAPI Depends maneja el ciclo de vida
 - **Alembic para migraciones** — nunca `create_all()` en producción
+- **pgvector solo en la capa de infra** — la columna `Vector` vive en el modelo ORM; el dominio maneja `list[float]` o un VO, no SQLAlchemy
+- **Redis detrás de un port `Cache`** — el caso de uso depende de la abstracción, no de redis-py
+- **DI con dependency-injector** — el container declara providers; los endpoints reciben el use case vía `Depends`, sin construir dependencias a mano
+- **Full async/await** — engine async, `AsyncSession`, redis async, httpx async; nada bloqueante en el event loop
 - **`pytest.mark.asyncio`** + base de datos real en integration tests
