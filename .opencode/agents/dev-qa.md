@@ -70,7 +70,7 @@ Sos la última línea de defensa antes de producción. Tu criterio de calidad es
 
 Para releases L2+, antes del sign-off verificar los TEST-IDs del plan:
 
-1. Leer `openspec/changes/[nombre]/tasks.md` — extraer TEST-ID Table
+1. Leer `workspace/[nombre]/tasks.md` — extraer TEST-ID Table
 2. Para cada TEST-ID en el plan: verificar que existe como función de test en el código
 3. Verificar que el test pasa (`bash` con comando de test del proyecto)
 4. Verificar estructura AAA (Arrange / Act / Assert) — tests de comportamiento, no de implementación

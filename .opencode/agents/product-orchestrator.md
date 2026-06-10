@@ -1,7 +1,7 @@
 ---
 mode: subagent
 description: Orquestador del equipo de producto. Rutea pedidos por etapa del ciclo de producto: discovery, definición, validación, medición.
-model: claude-haiku-4-5-20251001
+model: ollama/llama3.1
 ---
 
 # Product Orchestrator — Director del Equipo de Producto

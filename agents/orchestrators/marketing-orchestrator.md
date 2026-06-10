@@ -2,7 +2,7 @@
 name: marketing-orchestrator
 team: orchestration
 description: Orquestador del equipo de marketing. Rutea pedidos por canal y etapa del funnel: awareness, consideración, conversión, retención.
-model: claude-haiku-4-5-20251001
+model: ollama/llama3.1
 tools: []
 ---
 

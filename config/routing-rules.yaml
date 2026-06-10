@@ -117,6 +117,114 @@ cross_domain_pipelines:
       - product-orchestrator  # impacto en usuario
       - marketing-orchestrator # comunicación (si escala)
 
+# Provider routing — qué proveedor y modelo usa cada agente
+# Precedencia: ceremony_overrides > agent_providers > task_type_routing
+provider_routing:
+
+  # L4 siempre usa Claude — nunca negociable
+  l4_provider_lock: claude
+
+  providers:
+    claude:
+      description: Razonamiento profundo, compliance, decisiones irreversibles, L3/L4
+      api: anthropic
+      models:
+        high: claude-opus-4-8
+        medium: claude-sonnet-4-6
+        low: claude-haiku-4-5-20251001
+
+    codex:
+      description: Generación de código, refactor, implementación L1/L2
+      api: openai
+      models:
+        default: codex-5.5
+
+    ollama:
+      description: Clasificación, ruteo, borradores — bajo costo y latencia
+      api: ollama_cloud
+      models:
+        general: llama3.1
+        code: qwen2.5-coder
+
+  # Provider por agente (default — puede ser sobreescrito por ceremony_overrides)
+  agent_providers:
+    # Orquestadores → Ollama Cloud (ruteo determinístico, bajo costo)
+    meta-router: ollama/llama3.1
+    dev-orchestrator: ollama/llama3.1
+    product-orchestrator: ollama/llama3.1
+    marketing-orchestrator: ollama/llama3.1
+
+    # Dev L4 — Claude Opus (inamovible)
+    dev-architect: claude/claude-opus-4-8
+    dev-security: claude/claude-opus-4-8
+
+    # Dev — implementación pura → Codex; juicio/review → Claude
+    dev-technical-leader: claude/claude-sonnet-4-6    # review + mentoring requiere razonamiento
+    dev-senior-backend: codex/codex-5.5
+    dev-senior-frontend: codex/codex-5.5
+    dev-junior-backend: codex/codex-5.5
+    dev-junior-frontend: codex/codex-5.5
+    dev-devops: claude/claude-sonnet-4-6              # infra/CI requiere juicio contextual
+    dev-qa: claude/claude-sonnet-4-6                  # diseño de tests requiere razonamiento
+    dev-monitoreo: claude/claude-sonnet-4-6           # análisis de SLOs y alertas
+    dev-project-leader: claude/claude-sonnet-4-6      # roadmap y priorización
+
+    # Product — estrategia y discovery → Claude Sonnet
+    product-leader: claude/claude-sonnet-4-6
+    product-strategist: claude/claude-sonnet-4-6
+    product-owner: claude/claude-sonnet-4-6
+    product-ux-researcher: claude/claude-sonnet-4-6
+    product-senior-designer: claude/claude-sonnet-4-6
+    product-junior-designer: ollama/llama3.1
+    product-analyst: claude/claude-sonnet-4-6
+
+    # Marketing — estrategia y copy → Claude Sonnet; bajo riesgo → Ollama
+    marketing-leader: claude/claude-sonnet-4-6
+    marketing-brand-strategist: claude/claude-sonnet-4-6
+    marketing-content-strategist: claude/claude-sonnet-4-6
+    marketing-senior-copywriter: claude/claude-sonnet-4-6
+    marketing-junior-copywriter: ollama/llama3.1
+    marketing-senior-creative: claude/claude-sonnet-4-6
+    marketing-junior-designer: ollama/llama3.1
+    marketing-growth-marketer: claude/claude-sonnet-4-6
+    marketing-community-manager: ollama/llama3.1
+    marketing-analyst: claude/claude-sonnet-4-6
+
+  # Overrides por ceremony level (tienen mayor precedencia que agent_providers)
+  ceremony_overrides:
+    L4:
+      # Todos los agentes de implementación suben a Claude en L4
+      dev-senior-backend: claude/claude-sonnet-4-6
+      dev-senior-frontend: claude/claude-sonnet-4-6
+      dev-junior-backend: claude/claude-sonnet-4-6
+      dev-junior-frontend: claude/claude-sonnet-4-6
+      # Architect y Security siempre Opus — redundante pero explícito
+      dev-architect: claude/claude-opus-4-8
+      dev-security: claude/claude-opus-4-8
+    L3:
+      # En L3 los seniors usan Claude (contexto arquitectónico crítico)
+      dev-senior-backend: claude/claude-sonnet-4-6
+      dev-senior-frontend: claude/claude-sonnet-4-6
+
+  # Routing por tipo de tarea (menor precedencia — se aplica cuando el nivel no es L3/L4)
+  task_type_routing:
+    code_generation:
+      preferred_provider: codex
+      applies_to: [dev-senior-backend, dev-senior-frontend, dev-junior-backend, dev-junior-frontend]
+    architecture:
+      preferred_provider: claude
+      model: claude-opus-4-8
+      applies_to: [dev-architect, dev-technical-leader]
+    classification:
+      preferred_provider: ollama
+      model: llama3.1
+      applies_to: [meta-router, dev-orchestrator, product-orchestrator, marketing-orchestrator]
+    security_review:
+      preferred_provider: claude
+      model: claude-opus-4-8
+      applies_to: [dev-security]
+      override: true  # inamovible — nunca puede cambiar de provider
+
 # Escalamiento por urgencia
 urgency_overrides:
   production_down:

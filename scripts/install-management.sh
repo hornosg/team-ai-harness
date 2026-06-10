@@ -29,7 +29,8 @@ TARGET=""
 UPGRADE=false
 for arg in "$@"; do
   case "$arg" in
-    --upgrade) UPGRADE=true ;;
+    --upgrade|--update) UPGRADE=true ;;
+    --*) ;;  # ignorar flags desconocidos
     *) TARGET="$arg" ;;
   esac
 done

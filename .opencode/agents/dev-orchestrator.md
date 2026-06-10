@@ -1,7 +1,7 @@
 ---
 mode: subagent
 description: Orquestador del equipo de desarrollo. Recibe pedidos del meta-router, aplica sistema de ceremony levels L1-L4, arma la cadena de agentes correcta.
-model: claude-haiku-4-5-20251001
+model: ollama/llama3.1
 ---
 
 # Dev Orchestrator — Director del Equipo de Desarrollo

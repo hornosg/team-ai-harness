@@ -5,6 +5,7 @@ levels:
   L1:
     name: Quick Fix
     description: Cambio simple, reversible, bajo riesgo
+    default_provider: codex          # implementación → codex/codex-5.5; ruteo → ollama/llama3.1
     criteria:
       - Tiempo estimado menor a 30 minutos
       - Completamente reversible en producción
@@ -31,6 +32,7 @@ levels:
   L2:
     name: Feature Estándar
     description: Feature nueva dentro de patrones establecidos
+    default_provider: codex          # seniors → codex/codex-5.5; TL y QA → claude/claude-sonnet-4-6
     criteria:
       - Spec clara con criterios de aceptación
       - Sigue patrones de arquitectura existentes
@@ -57,6 +59,7 @@ levels:
   L3:
     name: Cambio Significativo
     description: Cambio de arquitectura, migración de datos, o nueva integración crítica
+    default_provider: claude          # todos los agentes → claude/claude-sonnet-4-6; architect → claude-opus-4-8
     criteria:
       - Modifica arquitectura o introduce nuevo patrón
       - Migración de base de datos (especialmente destructiva)
@@ -85,6 +88,7 @@ levels:
   L4:
     name: Crítico / Alto Riesgo
     description: Toca dinero, auth, datos sensibles, o compliance
+    default_provider: claude          # INAMOVIBLE — todos los agentes claude; architect + security → claude-opus-4-8
     criteria:
       - Cualquier flujo de pago o procesamiento financiero
       - Modificación del sistema de autenticación/autorización
