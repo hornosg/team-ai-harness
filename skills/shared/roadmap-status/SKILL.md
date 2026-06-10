@@ -11,7 +11,7 @@ triggers:
 
 # Roadmap Status
 
-Reporte unificado del estado del proyecto. Cruza `roadmap.yaml`, `propuestas/`, y `openspec/changes/` (si existe).
+Reporte unificado del estado del proyecto. Cruza `roadmap.yaml`, `propuestas/`, y `workspace/` (specs activas).
 
 ## Proceso
 
@@ -23,13 +23,12 @@ management/roadmap/roadmap.yaml          ← hitos + épicas + estados
 management/roadmap/propuestas/           ← escanear todos los *.md (no _TEMPLATE)
 ```
 
-**Specs activas — detectar cuál formato usa el proyecto:**
+**Specs activas:**
 ```
-management/openspec/changes/             ← formato nuevo (OpenSpec)
-management/openspec/cycles/              ← formato viejo (SpecKit) — si existe y no hay changes/
+management/workspace/                    ← specs activas (formato SNNN-slug/ o nombre-feature/)
 ```
 
-Reportar solo lo que existe en disco. Si no hay specs activas en ninguna de las dos rutas → reportar "Sin specs activas".
+Reportar solo lo que existe en disco. Si `workspace/` no existe o está vacío → reportar "Sin specs activas".
 
 **NUNCA usar memoria (Engram, contexto de sesión anterior) como fuente de estado del roadmap.** Los archivos son la única fuente de verdad.
 
@@ -49,10 +48,9 @@ Reportar solo lo que existe en disco. Si no hay specs activas en ninguna de las 
 
 ### 4. Cruzar con specs
 
-Detectar formato activo:
-- Si existe `management/openspec/changes/` → listar subdirectorios con `tasks.md`
-- Si existe `management/openspec/cycles/` (SpecKit) → listar subdirectorios con estado (no _template)
-- Si ninguno existe → omitir sección, no inventar
+Detectar specs activas:
+- Si existe `management/workspace/` → listar subdirectorios con `tasks.md` (ignorar `_template`, `_archive`)
+- Si no existe o vacío → omitir sección, no inventar
 
 Linkear spec ↔ épica ↔ propuesta solo si el vínculo está explícito en los archivos.
 
@@ -68,7 +66,7 @@ Linkear spec ↔ épica ↔ propuesta solo si el vínculo está explícito en lo
 
 🔄 EN PROGRESO ([N])
   E03 — [nombre] · H1 · Crítica
-       Spec: openspec/changes/[nombre] ← si existe
+       Spec: workspace/[nombre] ← si existe
   E07 — [nombre] · H2 · Alta
 
 📋 PARA TOMAR ([N]) — Hito actual: H[N]
@@ -94,10 +92,10 @@ Linkear spec ↔ épica ↔ propuesta solo si el vínculo está explícito en lo
     PROP-004 — [nombre] · aprobada → pendiente convertir a spec/épica
 
   📐 En ejecución ([N])
-    PROP-001 — [nombre] · en-ejecución → E03 · openspec/changes/[nombre]
+    PROP-001 — [nombre] · en-ejecución → E03 · workspace/[nombre]
 
 ──────────────────────────────────────────
-📐 SPECS ACTIVAS (OpenSpec)
+📐 SPECS ACTIVAS
   [nombre-cambio] → E03 · PROP-001
 
 ──────────────────────────────────────────
@@ -114,7 +112,7 @@ Linkear spec ↔ épica ↔ propuesta solo si el vínculo está explícito en lo
 
 Si hay propuestas `aprobada` sin spec → sugerir: "PROP-00N está aprobada. ¿Creo la épica y spec?"
 
-Si hay épicas `en-progreso` sin spec → sugerir: "E0N no tiene spec en OpenSpec. ¿Creo una?"
+Si hay épicas `en-progreso` sin spec → sugerir: "E0N no tiene spec en workspace/. ¿Creo una?"
 
 Si el hito actual está > 80% completo → sugerir: "H[N] casi listo. ¿Revisamos gate y planificamos H[N+1]?"
 

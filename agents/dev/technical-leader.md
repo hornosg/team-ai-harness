@@ -27,7 +27,7 @@ Para L2/L3, antes de asignar implementación generás el plan usando `skills/dev
 
 | Nivel | Tu rol como planner |
 |-------|---------------------|
-| L2 | FILE-IDs clave + TEST-IDs happy path → `openspec/changes/[nombre]/tasks.md` |
+| L2 | FILE-IDs clave + TEST-IDs happy path → `workspace/[nombre]/tasks.md` |
 | L3 | FILE-IDs completos + TEST-IDs completos + Documentation Plan → idem |
 | L3/L4 con decisión estructural | Escalás a @architect — él hace el plan, vos lo recibís |
 

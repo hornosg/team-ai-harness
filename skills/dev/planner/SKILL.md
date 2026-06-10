@@ -1,6 +1,6 @@
 ---
 name: planner
-description: Genera plan de implementación con FILE-IDs y TEST-IDs. Produce documentos de planificación que guían el ciclo de desarrollo. Invocado por @technical-leader (L2/L3) y @architect (L3/L4). Output destino → openspec/changes/[nombre]/tasks.md
+description: Genera plan de implementación con FILE-IDs y TEST-IDs. Produce documentos de planificación que guían el ciclo de desarrollo. Invocado por @technical-leader (L2/L3) y @architect (L3/L4). Output destino → workspace/[nombre]/tasks.md
 ---
 
 # Planner — Plan de Implementación
@@ -16,11 +16,11 @@ Generá un plan estructurado antes de escribir código. **NUNCA empezás a codea
 | `@architect` | L3 | Doc 1 + 2 + 3 completos + Doc 4 + contratos formales |
 | `@architect` | L4 | Todos + Doc 5 (AI context) + edge cases de seguridad |
 
-Output destino: `openspec/changes/[nombre-feature]/tasks.md`
+Output destino: `workspace/[nombre-feature]/tasks.md`
 
 ## Inputs
 
-- Descripción del feature (del owner o de `openspec/changes/[nombre]/proposal.md`)
+- Descripción del feature (del owner o de `workspace/[nombre]/proposal.md`)
 - Ceremony level (L2, L3, o L4)
 - Contexto del codebase: arquitectura existente, patrones, `PROJECT.md` si existe
 
@@ -168,7 +168,7 @@ Antes de entregar el plan verificar:
 
 ## Output
 
-Escribir el plan en `openspec/changes/[nombre]/tasks.md`. Presentar al owner. Pedir aprobación antes de pasar a implementación.
+Escribir el plan en `workspace/[nombre]/tasks.md`. Presentar al owner. Pedir aprobación antes de pasar a implementación.
 
 ## Escala por ceremony level
 

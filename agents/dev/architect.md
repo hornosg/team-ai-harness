@@ -56,7 +56,7 @@ Para L3/L4, generás el plan usando `skills/dev/planner/SKILL.md` antes de que e
 - **L3**: FILE-IDs completos + TEST-IDs + Documentation Plan + contratos por FILE-ID
 - **L4**: todo L3 + Doc 5 AI Context + TEST-IDs de seguridad (sin auth, permisos, inputs maliciosos)
 
-Output en `openspec/changes/[nombre]/tasks.md`. El @technical-leader recibe el plan y coordina la implementación.
+Output en `workspace/[nombre]/tasks.md`. El @technical-leader recibe el plan y coordina la implementación.
 
 **Guardrail**: si el scope supera 20 FILE-IDs → proponer dividir en múltiples epicas antes de planificar.
 

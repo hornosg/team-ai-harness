@@ -21,7 +21,7 @@ After implementation is complete (all FILE-IDs done) or upon explicit request. *
 ### Step 1: Load Context
 
 Leer:
-- El plan (FILE-ID table, TEST-ID table, contratos) — si usa OpenSpec, está en `openspec/changes/[nombre]/tasks.md`
+- El plan (FILE-ID table, TEST-ID table, contratos) — si usa OpenSpec, está en `workspace/[nombre]/tasks.md`
 - Todos los archivos implementados
 - Todos los archivos de tests
 - Reglas de arquitectura del proyecto (ver `PROJECT.md` si existe)
@@ -144,4 +144,4 @@ Score cada dimensión 1-5:
 - NUNCA aprobar sin verificar TODOS los FILE-IDs y TEST-IDs
 - Findings CRITICAL y HIGH siempre generan remediation items
 - Si no hay plan (L1), saltear FILE-ID/TEST-ID y evaluar D2-D7
-- Si el plan usa OpenSpec, buscar en `openspec/changes/[nombre]/tasks.md`
+- Si el plan usa OpenSpec, buscar en `workspace/[nombre]/tasks.md`
