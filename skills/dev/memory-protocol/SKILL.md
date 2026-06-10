@@ -64,8 +64,47 @@ Si el contexto fue compactado:
 2. Recuperar contexto con `mem_context` + `mem_search`
 3. Continuar trabajo
 
+## Memoria episódica local (por proyecto)
+
+Complementa Engram con dos archivos JSONL dentro del proyecto. Útil para registrar el *rastro* de decisiones y fallos sin depender del MCP.
+
+### Archivos
+
+```
+memory/
+  decisions.jsonl   ← decisiones de arquitectura y diseño
+  failures.jsonl    ← bugs e incidentes con raíz causa y fix
+```
+
+Agregar `memory/` al `.gitignore` si el contenido es sensible, o incluirlo si quiere versionarse junto al proyecto.
+
+### Estructura de entrada en decisions.jsonl
+
+```json
+{"date": "YYYY-MM-DD", "context": "qué estaba haciendo", "decision": "qué se decidió", "alternatives": ["opción A", "opción B"], "rationale": "por qué esta sobre las otras"}
+```
+
+### Estructura de entrada en failures.jsonl
+
+```json
+{"date": "YYYY-MM-DD", "symptom": "qué se observó", "root_cause": "por qué pasó", "fix": "cómo se resolvió", "prevent": "qué evita que vuelva a pasar"}
+```
+
+### Cuándo escribir
+
+- Al cerrar una decisión de diseño que no sea obvia → `decisions.jsonl`
+- Al resolver un bug que tomó más de 30 minutos → `failures.jsonl`
+
+### Cuándo leer
+
+- Al iniciar trabajo en un área → `grep <keyword> memory/decisions.jsonl`
+- Al enfrentar un error similar a uno anterior → `grep <symptom> memory/failures.jsonl`
+
+---
+
 ## Guardrails
 
 - NUNCA guardar PII (emails, tokens, passwords) en memoria
 - topic_key debe ser reutilizable entre sesiones — evitar genérico como "session-1"
 - Si no hay Engram MCP activo, documentar la decisión como comentario en el código o ADR
+- Los archivos JSONL de memoria episódica no reemplazan a Engram — son el registro local; Engram es la capa cross-proyecto
