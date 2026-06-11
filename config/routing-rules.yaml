@@ -130,7 +130,7 @@ provider_routing:
       api: anthropic
       models:
         high: claude-opus-4-8
-        medium: claude-sonnet-4-6
+        medium: claude-opus-4-8
         low: claude-haiku-4-5-20251001
 
     codex:
@@ -159,52 +159,52 @@ provider_routing:
     dev-security: claude/claude-opus-4-8
 
     # Dev — implementación pura → Codex; juicio/review → Claude
-    dev-technical-leader: claude/claude-sonnet-4-6    # review + mentoring requiere razonamiento
+    dev-technical-leader: claude/claude-opus-4-8    # review + mentoring requiere razonamiento
     dev-senior-backend: codex/codex-5.5
     dev-senior-frontend: codex/codex-5.5
     dev-junior-backend: codex/codex-5.5
     dev-junior-frontend: codex/codex-5.5
-    dev-devops: claude/claude-sonnet-4-6              # infra/CI requiere juicio contextual
-    dev-qa: claude/claude-sonnet-4-6                  # diseño de tests requiere razonamiento
-    dev-monitoreo: claude/claude-sonnet-4-6           # análisis de SLOs y alertas
-    dev-project-leader: claude/claude-sonnet-4-6      # roadmap y priorización
+    dev-devops: claude/claude-opus-4-8              # infra/CI requiere juicio contextual
+    dev-qa: claude/claude-opus-4-8                  # diseño de tests requiere razonamiento
+    dev-monitoreo: claude/claude-opus-4-8           # análisis de SLOs y alertas
+    dev-project-leader: claude/claude-opus-4-8      # roadmap y priorización
 
-    # Product — estrategia y discovery → Claude Sonnet
-    product-leader: claude/claude-sonnet-4-6
-    product-strategist: claude/claude-sonnet-4-6
-    product-owner: claude/claude-sonnet-4-6
-    product-ux-researcher: claude/claude-sonnet-4-6
-    product-senior-designer: claude/claude-sonnet-4-6
+    # Product — estrategia y discovery → Claude Opus
+    product-leader: claude/claude-opus-4-8
+    product-strategist: claude/claude-opus-4-8
+    product-owner: claude/claude-opus-4-8
+    product-ux-researcher: claude/claude-opus-4-8
+    product-senior-designer: claude/claude-opus-4-8
     product-junior-designer: ollama/llama3.1
-    product-analyst: claude/claude-sonnet-4-6
+    product-analyst: claude/claude-opus-4-8
 
-    # Marketing — estrategia y copy → Claude Sonnet; bajo riesgo → Ollama
-    marketing-leader: claude/claude-sonnet-4-6
-    marketing-brand-strategist: claude/claude-sonnet-4-6
-    marketing-content-strategist: claude/claude-sonnet-4-6
-    marketing-senior-copywriter: claude/claude-sonnet-4-6
+    # Marketing — estrategia y copy → Claude Opus; bajo riesgo → Ollama
+    marketing-leader: claude/claude-opus-4-8
+    marketing-brand-strategist: claude/claude-opus-4-8
+    marketing-content-strategist: claude/claude-opus-4-8
+    marketing-senior-copywriter: claude/claude-opus-4-8
     marketing-junior-copywriter: ollama/llama3.1
-    marketing-senior-creative: claude/claude-sonnet-4-6
+    marketing-senior-creative: claude/claude-opus-4-8
     marketing-junior-designer: ollama/llama3.1
-    marketing-growth-marketer: claude/claude-sonnet-4-6
+    marketing-growth-marketer: claude/claude-opus-4-8
     marketing-community-manager: ollama/llama3.1
-    marketing-analyst: claude/claude-sonnet-4-6
+    marketing-analyst: claude/claude-opus-4-8
 
   # Overrides por ceremony level (tienen mayor precedencia que agent_providers)
   ceremony_overrides:
     L4:
       # Todos los agentes de implementación suben a Claude en L4
-      dev-senior-backend: claude/claude-sonnet-4-6
-      dev-senior-frontend: claude/claude-sonnet-4-6
-      dev-junior-backend: claude/claude-sonnet-4-6
-      dev-junior-frontend: claude/claude-sonnet-4-6
+      dev-senior-backend: claude/claude-opus-4-8
+      dev-senior-frontend: claude/claude-opus-4-8
+      dev-junior-backend: claude/claude-opus-4-8
+      dev-junior-frontend: claude/claude-opus-4-8
       # Architect y Security siempre Opus — redundante pero explícito
       dev-architect: claude/claude-opus-4-8
       dev-security: claude/claude-opus-4-8
     L3:
       # En L3 los seniors usan Claude (contexto arquitectónico crítico)
-      dev-senior-backend: claude/claude-sonnet-4-6
-      dev-senior-frontend: claude/claude-sonnet-4-6
+      dev-senior-backend: claude/claude-opus-4-8
+      dev-senior-frontend: claude/claude-opus-4-8
 
   # Routing por tipo de tarea (menor precedencia — se aplica cuando el nivel no es L3/L4)
   task_type_routing:

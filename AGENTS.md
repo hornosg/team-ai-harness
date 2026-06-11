@@ -82,11 +82,11 @@ Cada agente declara su modelo en el frontmatter (`model:`) y justifica la elecci
 
 | Modelo | Cuándo | Agentes |
 |--------|--------|---------|
-| `claude-opus-4-8` | Razonamiento profundo, decisiones casi irreversibles, blast radius máximo | `dev-architect`, `dev-security` |
-| `claude-sonnet-4-6` | Código real, análisis, escritura de alto impacto, juicio técnico/estratégico | todos los seniors, leaders, TL, `dev-devops`, `dev-qa`, `dev-monitoreo`, analysts, strategists, owners, copywriters/creatives senior, juniors que escriben código (`dev-junior-backend`, `dev-junior-frontend`) |
+| `claude-opus-4-8` | Razonamiento profundo (decisiones casi irreversibles, blast radius máximo) y juicio técnico/estratégico, análisis y escritura de alto impacto | `dev-architect`, `dev-security`, `dev-technical-leader`, `dev-project-leader`, `dev-devops`, `dev-qa`, `dev-monitoreo`, todos los leaders, strategists, analysts, owners, designers senior, copywriters/creatives senior |
+| `codex/codex-5.5` | Generación de código (seniors y juniors de dev). Fallback Claude Code: `claude-sonnet-4-6` (Sonnet más nuevo disponible) | `dev-senior-backend`, `dev-senior-frontend`, `dev-junior-backend`, `dev-junior-frontend` |
 | `claude-haiku-4-5-20251001` | Clasificación/ruteo, tareas acotadas Read-only, alto volumen y baja complejidad | `meta-router`, los 3 orchestrators, `product-junior-designer`, `marketing-junior-copywriter`, `marketing-junior-designer`, `marketing-community-manager` |
 
-**Criterio:** los juniors que **escriben código** usan sonnet (haiku sub-rendiría en código, con red de seguridad de senior+TL); los juniors de diseño/copy de bajo riesgo usan haiku. `dev-devops`, `dev-qa`, `dev-monitoreo` y los analysts subieron de haiku a sonnet porque IaC, diseño de tests, PromQL/LogQL/SLOs y análisis cuantitativo exigen razonamiento. `product-leader` bajó de opus a sonnet: visión y OKRs son juicio estratégico, no profundidad de arquitectura.
+**Criterio:** los agentes que **escriben código** corren en `codex/codex-5.5`, con fallback a Claude `claude-sonnet-4-6` y override a Claude en L3/L4. Los juniors de diseño/copy de bajo riesgo usan haiku. Toda la capa de seniors no-código, leaders, TL, `dev-devops`, `dev-qa`, `dev-monitoreo`, analysts, strategists y owners usa `claude-opus-4-8`: el modelo más capaz para juicio técnico y estratégico, análisis cuantitativo y escritura de alto impacto.
 
 `sync-agents.sh` valida que todo `model:` esté en la allowlist vigente y avisa si encuentra un string desconocido.
 

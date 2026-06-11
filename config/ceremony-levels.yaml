@@ -32,7 +32,7 @@ levels:
   L2:
     name: Feature Estándar
     description: Feature nueva dentro de patrones establecidos
-    default_provider: codex          # seniors → codex/codex-5.5; TL y QA → claude/claude-sonnet-4-6
+    default_provider: codex          # seniors → codex/codex-5.5; TL y QA → claude/claude-opus-4-8
     criteria:
       - Spec clara con criterios de aceptación
       - Sigue patrones de arquitectura existentes
@@ -59,7 +59,7 @@ levels:
   L3:
     name: Cambio Significativo
     description: Cambio de arquitectura, migración de datos, o nueva integración crítica
-    default_provider: claude          # todos los agentes → claude/claude-sonnet-4-6; architect → claude-opus-4-8
+    default_provider: claude          # todos los agentes → claude/claude-opus-4-8; architect → claude-opus-4-8
     criteria:
       - Modifica arquitectura o introduce nuevo patrón
       - Migración de base de datos (especialmente destructiva)

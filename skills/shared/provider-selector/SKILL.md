@@ -32,7 +32,7 @@ Determina el provider y modelo óptimo para una tarea, aplicando las reglas de `
 config/routing-rules.yaml → sección provider_routing
 ```
 
-Si no existe o no tiene `provider_routing`: usar defaults Claude (opus para L4, sonnet para L2/L3, haiku para L1 y orquestadores).
+Si no existe o no tiene `provider_routing`: usar defaults Claude (opus para L2/L3/L4 y decisiones de juicio, `claude-sonnet-4-6` como fallback de implementadores codex, haiku para L1 y orquestadores).
 
 ## Paso 2 — Clasificar tipo de tarea
 
@@ -68,7 +68,7 @@ Dado provider y complejidad de la tarea:
 | Provider | Tier | Modelo | Cuándo |
 |----------|------|--------|--------|
 | claude | high | claude-opus-4-8 | L4, arquitectura irreversible, security |
-| claude | medium | claude-sonnet-4-6 | L2/L3, análisis, reviews, estrategia |
+| claude | medium | claude-opus-4-8 | L2/L3, análisis, reviews, estrategia |
 | claude | low | claude-haiku-4-5-20251001 | L1, clasificación, ruteo |
 | codex | default | codex-5.5 | cualquier task de `code_generation` |
 | ollama | general | llama3.1 | clasificación, borradores, ruteo |
@@ -78,7 +78,7 @@ Dado provider y complejidad de la tarea:
 
 ```
 PROVIDER:             [claude | codex | ollama]
-MODEL:                [model-id — ej: codex-5.5 | llama3.1 | claude-sonnet-4-6]
+MODEL:                [model-id — ej: codex-5.5 | llama3.1 | claude-opus-4-8]
 CLAUDE_CODE_FALLBACK: [modelo Anthropic si provider != claude]
 NIVEL_CONFIRMADO:     [L1 | L2]
 TASK_TYPE:            [tipo detectado]
@@ -96,18 +96,18 @@ ALTERNATIVA:          [provider/modelo si el principal no está disponible]
 | Refactor de módulo | senior-backend | codex | codex-5.5 |
 | Diseño de arquitectura | architect | claude | claude-opus-4-8 |
 | Clasificar pedido / ruteo | meta-router, orchestrators | ollama | llama3.1 |
-| Review de PR | technical-leader | claude | claude-sonnet-4-6 |
-| Diseño de tests | qa | claude | claude-sonnet-4-6 |
-| Infra / CI/CD | devops | claude | claude-sonnet-4-6 |
-| Análisis de métricas | product-analyst | claude | claude-sonnet-4-6 |
-| Discovery / UX | ux-researcher, product-strategist | claude | claude-sonnet-4-6 |
-| Copy estratégico | senior-copywriter, brand-strategist | claude | claude-sonnet-4-6 |
+| Review de PR | technical-leader | claude | claude-opus-4-8 |
+| Diseño de tests | qa | claude | claude-opus-4-8 |
+| Infra / CI/CD | devops | claude | claude-opus-4-8 |
+| Análisis de métricas | product-analyst | claude | claude-opus-4-8 |
+| Discovery / UX | ux-researcher, product-strategist | claude | claude-opus-4-8 |
+| Copy estratégico | senior-copywriter, brand-strategist | claude | claude-opus-4-8 |
 | Posts / captions / borrador | junior-copywriter, community-manager | ollama | llama3.1 |
 
 ## Casos edge
 
 **Provider no disponible:**
-Jerarquía de fallback: `codex → claude-sonnet-4-6 → ollama/llama3.1`.
+Jerarquía de fallback: `codex → claude-sonnet-4-6 → ollama/llama3.1` (Sonnet más nuevo disponible; en L3/L4 el fallback escala a `claude-opus-4-8`).
 Indicar en `ALTERNATIVA` y notificar al owner.
 
 **Tarea mixta — código + decisiones de arquitectura:**
@@ -117,7 +117,7 @@ Separar en dos pedidos. La parte de arquitectura siempre va a `claude/claude-opu
 Aceptar. Documentar en `REASONING: override manual por owner — [razón]`. No bloquear.
 
 **Sin `provider_routing` en routing-rules.yaml:**
-Usar defaults Claude: orchestrators → `claude-haiku-4-5-20251001`, implementadores → `claude-sonnet-4-6`, decisiones críticas → `claude-opus-4-8`.
+Usar defaults Claude: orchestrators → `claude-haiku-4-5-20251001`, implementadores (fallback de codex) → `claude-sonnet-4-6`, decisiones críticas / no-código → `claude-opus-4-8`.
 
 **Tarea L1 con urgencia y Ollama no disponible:**
 Fallback a `claude-haiku-4-5-20251001`. No degradar a un provider sin disponibilidad confirmada.
