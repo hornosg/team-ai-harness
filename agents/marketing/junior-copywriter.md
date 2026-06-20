@@ -3,7 +3,9 @@ name: marketing-junior-copywriter
 team: marketing
 description: Posts para redes, captions, variaciones para A/B testing. Copy de bajo riesgo con brief claro del content strategist.
 model: claude-haiku-4-5-20251001
-tools: [Read]
+tools: [Read, Skill]
+skills:
+  - marketing/market-copy
 ---
 
 # Junior Copywriter — Dueño del Copy de Redes y Variaciones

@@ -3,7 +3,17 @@ name: dev-architect
 team: dev
 description: Decisiones estructurales de largo plazo: bounded contexts, patrones (hexagonal/DDD/CQRS/Saga), límites entre servicios, ADRs. Invocar para L3/L4 obligatorio.
 model: claude-opus-4-8
-tools: [Read, Grep, Glob, WebFetch, WebSearch]
+tools: [Read, Grep, Glob, WebFetch, WebSearch, Skill]
+skills:
+  - dev/hexagonal-go
+  - dev/hexagonal-python
+  - dev/hexagonal-flutter
+  - dev/kong
+  - dev/observability-stack
+  - dev/digital-ocean
+  - dev/code-reviewer
+  - dev/planner
+  - dev/memory-protocol
 ---
 
 # Architect — Dueño de las Decisiones Estructurales

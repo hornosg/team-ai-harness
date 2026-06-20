@@ -21,6 +21,8 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CANONICAL_DIR="$ROOT/agents"
 CLAUDE_DIR="$ROOT/.claude/agents"
 OPENCODE_DIR="$ROOT/.opencode/agents"
+SKILLS_SRC="$ROOT/skills"
+CLAUDE_SKILLS_DIR="$ROOT/.claude/skills"
 
 DRY_RUN=false
 if [[ "${1:-}" == "--dry-run" ]]; then
@@ -51,6 +53,58 @@ extract_frontmatter() {
 extract_body() {
   local file="$1"
   awk '/^---/{c++; next} c>=2' "$file"
+}
+
+# Extrae los ítems de la lista YAML `skills:` del frontmatter (uno por línea)
+extract_skills_list() {
+  awk '
+    /^---/{c++; next}
+    c==1 && /^skills:[[:space:]]*$/{ins=1; next}
+    c==1 && ins && /^[[:space:]]*-[[:space:]]/{sub(/^[[:space:]]*-[[:space:]]*/,""); print; next}
+    c==1 && ins && /^[^[:space:]-]/{ins=0}
+  ' "$1"
+}
+
+# Resuelve, valida e instala las skills de un agente en .claude/skills/.
+# Setea las globales: INSTALLED_SLUGS (array) y SKILLS_INJECT (bloque markdown).
+resolve_and_install_skills() {
+  local canonical_file="$1" agent_name="$2"
+  INSTALLED_SLUGS=()
+  SKILLS_INJECT=""
+  local list slug ref src
+  list="$(extract_skills_list "$canonical_file")"
+  [[ -z "$list" ]] && return 0
+  while IFS= read -r ref; do
+    [[ -z "$ref" ]] && continue
+    slug="${ref##*/}"
+    src=""
+    if [[ -d "$SKILLS_SRC/$ref" ]]; then src="$SKILLS_SRC/$ref"
+    elif [[ -d "$SKILLS_SRC/$slug" ]]; then src="$SKILLS_SRC/$slug"; fi
+    if [[ -z "$src" || ! -f "$src/SKILL.md" ]]; then
+      echo -e "  ${YELLOW}⚠ skill no encontrada:${NC} '$ref' (referenciada por $agent_name)"
+      continue
+    fi
+    if [[ "$DRY_RUN" == false ]]; then
+      mkdir -p "$CLAUDE_SKILLS_DIR/$slug"
+      cp -R "$src/." "$CLAUDE_SKILLS_DIR/$slug/"
+    fi
+    INSTALLED_SLUGS+=("$slug")
+  done <<< "$list"
+
+  if [[ ${#INSTALLED_SLUGS[@]} -gt 0 ]]; then
+    SKILLS_INJECT=$'\n\n## Skills habilitadas (auto-generado por sync — no editar a mano)\n\nInvocá estas skills con la tool `Skill`. Preferí estas para tu rol:\n'
+    for slug in "${INSTALLED_SLUGS[@]}"; do
+      SKILLS_INJECT+="- \`${slug}\`"$'\n'
+    done
+  fi
+}
+
+# Garantiza que `Skill` esté en la lista tools `[...]`
+ensure_skill_tool() {
+  local tools="$1"
+  if [[ "$tools" == *Skill* ]]; then echo "$tools"; return; fi
+  if [[ "$tools" == "[]" || -z "$tools" ]]; then echo "[Skill]"; return; fi
+  echo "${tools%]}, Skill]"
 }
 
 # Detecta el provider a partir del campo model
@@ -153,15 +207,26 @@ process_agent() {
 
   echo -e "${BLUE}→${NC} $name ${CYAN}[$provider]${NC}"
 
+  # ── Skills: resolver, validar, instalar en .claude/skills/ ───────────────
+  resolve_and_install_skills "$canonical_file" "$name"
+  local cc_tools body_with_skills
+  body_with_skills="${body}${SKILLS_INJECT}"
+  if [[ ${#INSTALLED_SLUGS[@]} -gt 0 ]]; then
+    cc_tools="$(ensure_skill_tool "$tools")"
+    echo -e "  ${GREEN}✓${NC} Skills      → ${#INSTALLED_SLUGS[@]} instaladas: ${INSTALLED_SLUGS[*]}"
+  else
+    cc_tools="$tools"
+  fi
+
   # ── Claude Code (.claude/agents/) ────────────────────────────────────────
   local claude_content
   claude_content="---
 name: ${name}
 description: ${description}
 model: ${cc_model}
-tools: ${tools}
+tools: ${cc_tools}
 ---
-${body}"
+${body_with_skills}"
 
   if [[ "$DRY_RUN" == false ]]; then
     echo "$claude_content" > "$CLAUDE_DIR/${name}.md"
@@ -181,7 +246,7 @@ mode: subagent
 description: ${description}
 model: ${oc_model}
 ---
-${body}"
+${body_with_skills}"
 
   if [[ "$DRY_RUN" == false ]]; then
     echo "$opencode_content" > "$OPENCODE_DIR/${name}.md"
@@ -198,7 +263,7 @@ ${body}"
 }
 
 # Asegurar directorios de destino
-mkdir -p "$CLAUDE_DIR" "$OPENCODE_DIR"
+mkdir -p "$CLAUDE_DIR" "$OPENCODE_DIR" "$CLAUDE_SKILLS_DIR"
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

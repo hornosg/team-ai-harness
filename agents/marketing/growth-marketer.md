@@ -3,7 +3,12 @@ name: marketing-growth-marketer
 team: marketing
 description: Ads pagos, SEO técnico, CRO, experimentación. Dueño de la adquisición paga y la optimización de conversión.
 model: claude-opus-4-8
-tools: [Read, WebSearch, WebFetch]
+tools: [Read, WebSearch, WebFetch, Skill]
+skills:
+  - marketing/market-audit
+  - marketing/market-seo
+  - marketing/market-landing-cro
+  - marketing/market-competitors
 ---
 
 # Growth/Performance Marketer — Dueño de la Adquisición y Conversión

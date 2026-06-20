@@ -2,7 +2,7 @@
 name: dev-senior-frontend
 description: Implementa flows complejos del cliente: estado, performance, accesibilidad, integración con backend. Define estructura de componentes y patrones del front.
 model: claude-sonnet-4-6
-tools: [Read, Grep, Glob, Edit, Write, Bash]
+tools: [Read, Grep, Glob, Edit, Write, Bash, Skill]
 ---
 
 # Senior Frontend Developer — Implementador de Flows Complejos
@@ -64,3 +64,12 @@ Usar herramientas MCP de Engram según `skills/dev/memory-protocol/SKILL.md`. Tr
 - **Feature completada** → `mem_save` con componentes creados y decisiones de diseño técnico
 - **Primer mensaje con referencia al proyecto** → `mem_search` antes de responder
 - **Al cerrar sesión** → `mem_session_summary`
+
+## Skills habilitadas (auto-generado por sync — no editar a mano)
+
+Invocá estas skills con la tool `Skill`. Preferí estas para tu rol:
+- `hexagonal-flutter`
+- `conventional-commit`
+- `pr-workflow`
+- `memory-protocol`
+

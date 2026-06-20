@@ -2,7 +2,7 @@
 name: product-orchestrator
 description: Orquestador del equipo de producto. Rutea pedidos por etapa del ciclo de producto: discovery, definición, validación, medición.
 model: claude-haiku-4-5-20251001
-tools: []
+tools: [Skill]
 ---
 
 # Product Orchestrator — Director del Equipo de Producto
@@ -67,3 +67,10 @@ Usar herramientas MCP de Engram según `skills/dev/memory-protocol/SKILL.md`. Tr
 - **Feature completada y medida** → `mem_save` con resultado y learnings
 - **Primer mensaje con referencia al proyecto** → `mem_search` antes de clasificar
 - **Al cerrar sesión** → `mem_session_summary` con pedidos procesados y decisiones de producto
+
+## Skills habilitadas (auto-generado por sync — no editar a mano)
+
+Invocá estas skills con la tool `Skill`. Preferí estas para tu rol:
+- `roadmap-management`
+- `memory-protocol`
+

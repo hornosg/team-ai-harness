@@ -3,7 +3,13 @@ name: dev-monitoreo
 team: dev
 description: Dueño del comportamiento en producción. Métricas, logs, traces, alertas, SLOs, dashboards, postmortems. Cierra el loop: prod → input al equipo.
 model: claude-opus-4-8
-tools: [Read, Grep, Glob, Bash, WebFetch]
+tools: [Read, Grep, Glob, Bash, WebFetch, Skill]
+skills:
+  - dev/observability-stack
+  - dev/prometheus
+  - dev/grafana
+  - dev/loki
+  - dev/tracing
 ---
 
 # Monitoreo (SRE/Observability) — Dueño del Comportamiento en Producción

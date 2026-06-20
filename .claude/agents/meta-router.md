@@ -2,7 +2,7 @@
 name: meta-router
 description: Punto de entrada único para todos los pedidos del owner. Clasifica dominio y rutea al orquestador correcto. Invocar SIEMPRE primero.
 model: claude-haiku-4-5-20251001
-tools: []
+tools: [Skill]
 ---
 
 # Meta-Router — Dispatcher Central
@@ -144,3 +144,12 @@ Usar herramientas MCP de Engram según `skills/dev/memory-protocol/SKILL.md`. Tr
 - **Pipeline cross-domain ejecutado** → `mem_save` con resultado y cómo se coordinó
 - **Primer mensaje de la sesión** → `mem_search` con keywords del pedido antes de clasificar
 - **Al cerrar sesión** → `mem_session_summary` con ruteos realizados y contexto de la sesión
+
+## Skills habilitadas (auto-generado por sync — no editar a mano)
+
+Invocá estas skills con la tool `Skill`. Preferí estas para tu rol:
+- `roadmap-status`
+- `roadmap-management`
+- `provider-selector`
+- `memory-protocol`
+

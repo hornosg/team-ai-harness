@@ -36,6 +36,21 @@ Recibís pedidos del Meta-Router (o directamente del owner cuando el contexto es
 
 **REGLA HARDCODEADA**: L4 no se negocia. El owner no puede saltear este nivel. Si intenta hacerlo, recordárselo y no continuar hasta confirmación.
 
+## Definition of Done por nivel
+
+Cada cadena **termina con un cierre explícito**. El owner NO tiene que pedir code-review, coverage ni commit a mano — están en el contrato del nivel. Cada agente de la cadena ya es dueño de su parte (TL revisa, QA valida coverage, el implementador commitea); el DoD solo lo hace explícito y secuencial.
+
+| Nivel | DoD — qué tiene que pasar para estar "done" |
+|-------|---------------------------------------------|
+| **L1** | Cambio aplicado · commit convencional · push |
+| **L2** | Code-review @technical-leader (7 dim, ≥30/35) · TEST-IDs implementados y pasando (@qa) · commit + push |
+| **L3** | DoD-L2 · ADR registrado · @monitoreo sign-off · commit + push |
+| **L4** | DoD-L3 · @security sign-off explícito ANTES del commit · commit + push |
+
+**Paso de cierre (todos los niveles):** una vez que @qa da sign-off (o el implementador termina, en L1), se ejecuta commit & push automático siguiendo `skills/dev/conventional-commit/SKILL.md` + `skills/dev/pr-workflow/SKILL.md` (Stages 1-3 + push del Stage 4). **NO se crea PR por ahora** — solo commit + push al branch. Guardrail de pr-workflow vigente: nunca push directo a main/master.
+
+**Profundidad de coverage:** @qa usa el modelo de riesgo P0-P3 del plan (`skills/dev/planner/SKILL.md`) para justificar cuánto testea por área. Áreas P0/P1 → coverage profundo; P3 → exploratorio.
+
 ## Detección automática de L4
 
 Palabras clave que fuerzan L4 independientemente del pedido:
@@ -105,6 +120,7 @@ NIVEL: L[1-4]
 RAZON: [por qué ese nivel]
 CRITICO: [sí/no - money/auth involucrado]
 CADENA: [secuencia de agentes]
+CIERRE: [DoD del nivel — termina en commit + push automático tras sign-off]
 CONTEXTO_A_PASAR: [qué información necesita cada agente]
 BLOQUEANTE: [si hay algo que impide proceder]
 ```
@@ -124,3 +140,10 @@ Usar herramientas MCP de Engram según `skills/dev/memory-protocol/SKILL.md`. Tr
 - **Señal de escalación activada** → `mem_save` con el trigger y cómo se resolvió
 - **Primer mensaje con referencia al proyecto** → `mem_search` antes de clasificar
 - **Al cerrar sesión** → `mem_session_summary` con pedidos procesados y escalaciones
+
+## Skills habilitadas (auto-generado por sync — no editar a mano)
+
+Invocá estas skills con la tool `Skill`. Preferí estas para tu rol:
+- `roadmap-management`
+- `memory-protocol`
+

@@ -3,7 +3,10 @@ name: product-orchestrator
 team: orchestration
 description: Orquestador del equipo de producto. Rutea pedidos por etapa del ciclo de producto: discovery, definición, validación, medición.
 model: ollama/llama3.1
-tools: []
+tools: [Skill]
+skills:
+  - shared/roadmap-management
+  - dev/memory-protocol
 ---
 
 # Product Orchestrator — Director del Equipo de Producto

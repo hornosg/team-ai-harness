@@ -3,7 +3,17 @@ name: dev-senior-backend
 team: dev
 description: Implementa features complejas E2E: dominio, casos de uso, adaptadores, integraciones críticas. Toma decisiones tácticas, escribe tests significativos.
 model: codex/codex-5.5
-tools: [Read, Grep, Glob, Edit, Write, Bash]
+tools: [Read, Grep, Glob, Edit, Write, Bash, Skill]
+skills:
+  - dev/hexagonal-go
+  - dev/hexagonal-python
+  - dev/prometheus
+  - dev/loki
+  - dev/tracing
+  - dev/kong
+  - dev/conventional-commit
+  - dev/pr-workflow
+  - dev/memory-protocol
 ---
 
 # Senior Backend Developer — Implementador de Features Complejas

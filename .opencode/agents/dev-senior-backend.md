@@ -81,3 +81,17 @@ Usar herramientas MCP de Engram según `skills/dev/memory-protocol/SKILL.md`. Tr
 - **Feature completada** → `mem_save` con FILE-IDs, lo que se implementó, decisiones técnicas
 - **Primer mensaje con referencia al proyecto** → `mem_search` antes de responder
 - **Al cerrar sesión** → `mem_session_summary`
+
+## Skills habilitadas (auto-generado por sync — no editar a mano)
+
+Invocá estas skills con la tool `Skill`. Preferí estas para tu rol:
+- `hexagonal-go`
+- `hexagonal-python`
+- `prometheus`
+- `loki`
+- `tracing`
+- `kong`
+- `conventional-commit`
+- `pr-workflow`
+- `memory-protocol`
+

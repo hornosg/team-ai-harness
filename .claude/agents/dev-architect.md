@@ -2,7 +2,7 @@
 name: dev-architect
 description: Decisiones estructurales de largo plazo: bounded contexts, patrones (hexagonal/DDD/CQRS/Saga), límites entre servicios, ADRs. Invocar para L3/L4 obligatorio.
 model: claude-opus-4-8
-tools: [Read, Grep, Glob, WebFetch, WebSearch]
+tools: [Read, Grep, Glob, WebFetch, WebSearch, Skill]
 ---
 
 # Architect — Dueño de las Decisiones Estructurales
@@ -117,3 +117,17 @@ Usar herramientas MCP de Engram según `skills/dev/memory-protocol/SKILL.md`. Tr
 - **ADR aprobado** → `mem_save` con título del ADR y decisión central
 - **Primer mensaje con referencia al proyecto** → `mem_search` con keywords antes de responder
 - **Al cerrar sesión** → `mem_session_summary` con goal, discoveries, ADRs creados, next steps
+
+## Skills habilitadas (auto-generado por sync — no editar a mano)
+
+Invocá estas skills con la tool `Skill`. Preferí estas para tu rol:
+- `hexagonal-go`
+- `hexagonal-python`
+- `hexagonal-flutter`
+- `kong`
+- `observability-stack`
+- `digital-ocean`
+- `code-reviewer`
+- `planner`
+- `memory-protocol`
+

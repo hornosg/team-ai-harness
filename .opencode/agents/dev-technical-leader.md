@@ -99,3 +99,13 @@ Usar herramientas MCP de Engram según `skills/dev/memory-protocol/SKILL.md`. Tr
 - **Feature completada con PR mergeado** → `mem_save` con FILE-IDs y lo que se aprendió
 - **Primer mensaje con referencia al proyecto** → `mem_search` antes de responder
 - **Al cerrar sesión** → `mem_session_summary` con features revisadas, pendientes, decisiones
+
+## Skills habilitadas (auto-generado por sync — no editar a mano)
+
+Invocá estas skills con la tool `Skill`. Preferí estas para tu rol:
+- `planner`
+- `code-reviewer`
+- `conventional-commit`
+- `pr-workflow`
+- `memory-protocol`
+

@@ -138,6 +138,8 @@ MGMT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ROOT="$(cd "$MGMT_DIR/.." && pwd)"
 CANONICAL_DIR="$MGMT_DIR/agents"
 RULES_DIR="$MGMT_DIR/rules"
+SKILLS_SRC="$MGMT_DIR/skills"
+CLAUDE_SKILLS_DIR="$ROOT/.claude/skills"
 
 # ─── Adapters activos ────────────────────────────────────────────────────────
 # Descomentar los que se quieran activar:
@@ -165,6 +167,57 @@ extract_frontmatter() {
   awk '/^---/{c++; next} c==1 && /^'"$key"':/{gsub(/^'"$key"':[[:space:]]*/, ""); gsub(/^"/, ""); gsub(/"$/, ""); print; exit}' "$file"
 }
 extract_body() { awk '/^---/{c++; next} c>=2' "$1"; }
+
+# Extrae los ítems de la lista YAML `skills:` del frontmatter (uno por línea)
+extract_skills_list() {
+  awk '
+    /^---/{c++; next}
+    c==1 && /^skills:[[:space:]]*$/{ins=1; next}
+    c==1 && ins && /^[[:space:]]*-[[:space:]]/{sub(/^[[:space:]]*-[[:space:]]*/,""); print; next}
+    c==1 && ins && /^[^[:space:]-]/{ins=0}
+  ' "$1"
+}
+
+# Resuelve, valida e instala las skills de un agente en .claude/skills/.
+# Setea globales: INSTALLED_SLUGS (array) y SKILLS_INJECT (bloque markdown).
+resolve_and_install_skills() {
+  local canonical_file="$1" agent_name="$2"
+  INSTALLED_SLUGS=()
+  SKILLS_INJECT=""
+  local list slug ref src
+  list="$(extract_skills_list "$canonical_file")"
+  [[ -z "$list" ]] && return 0
+  while IFS= read -r ref; do
+    [[ -z "$ref" ]] && continue
+    slug="${ref##*/}"
+    src=""
+    if [[ -d "$SKILLS_SRC/$ref" ]]; then src="$SKILLS_SRC/$ref"
+    elif [[ -d "$SKILLS_SRC/$slug" ]]; then src="$SKILLS_SRC/$slug"; fi
+    if [[ -z "$src" || ! -f "$src/SKILL.md" ]]; then
+      echo -e "    ${YELLOW}⚠ skill no encontrada:${NC} '$ref' (referenciada por $agent_name)"
+      continue
+    fi
+    if [[ "$DRY_RUN" == false ]]; then
+      mkdir -p "$CLAUDE_SKILLS_DIR/$slug"
+      cp -R "$src/." "$CLAUDE_SKILLS_DIR/$slug/"
+    fi
+    INSTALLED_SLUGS+=("$slug")
+  done <<< "$list"
+  if [[ ${#INSTALLED_SLUGS[@]} -gt 0 ]]; then
+    SKILLS_INJECT=$'\n\n## Skills habilitadas (auto-generado por sync — no editar a mano)\n\nInvocá estas skills con la tool `Skill`. Preferí estas para tu rol:\n'
+    for slug in "${INSTALLED_SLUGS[@]}"; do
+      SKILLS_INJECT+="- \`${slug}\`"$'\n'
+    done
+  fi
+}
+
+# Garantiza que `Skill` esté en la lista tools `[...]`
+ensure_skill_tool() {
+  local tools="$1"
+  if [[ "$tools" == *Skill* ]]; then echo "$tools"; return; fi
+  if [[ "$tools" == "[]" || -z "$tools" ]]; then echo "[Skill]"; return; fi
+  echo "${tools%]}, Skill]"
+}
 
 # ─── Adapter: Claude Code ────────────────────────────────────────────────────
 adapter_claude() {
@@ -258,11 +311,21 @@ while IFS= read -r -d '' file; do
   body="$(extract_body "$file")"
 
   echo -e "${BLUE}→${NC} $name ($team)"
+
+  # Skills: resolver, validar, instalar en .claude/skills/ + inyectar en el body
+  resolve_and_install_skills "$file" "$name"
+  local_body="${body}${SKILLS_INJECT}"
+  cc_tools="$tools"
+  if [[ ${#INSTALLED_SLUGS[@]} -gt 0 ]]; then
+    cc_tools="$(ensure_skill_tool "$tools")"
+    echo -e "    ${GREEN}✓${NC} skills  → ${#INSTALLED_SLUGS[@]} instaladas: ${INSTALLED_SLUGS[*]}"
+  fi
+
   for adapter in "${ADAPTERS[@]}"; do
     case "$adapter" in
-      claude)   adapter_claude   "$name" "$description" "$model" "$tools" "$body" ;;
-      opencode) adapter_opencode "$name" "$description" "$model" "$tools" "$body" ;;
-      copilot)  adapter_copilot  "$name" "$description" "$model" "$tools" "$body" ;;
+      claude)   adapter_claude   "$name" "$description" "$model" "$cc_tools" "$local_body" ;;
+      opencode) adapter_opencode "$name" "$description" "$model" "$cc_tools" "$local_body" ;;
+      copilot)  adapter_copilot  "$name" "$description" "$model" "$cc_tools" "$local_body" ;;
     esac
   done
   ((generated++)) || true

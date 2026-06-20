@@ -65,3 +65,9 @@ Usar herramientas MCP de Engram según `skills/dev/memory-protocol/SKILL.md`. Tr
 - **Campaña cerrada con resultados** → `mem_save` con learnings y qué funcionó
 - **Primer mensaje con referencia al proyecto** → `mem_search` antes de clasificar
 - **Al cerrar sesión** → `mem_session_summary` con campañas procesadas y decisiones
+
+## Skills habilitadas (auto-generado por sync — no editar a mano)
+
+Invocá estas skills con la tool `Skill`. Preferí estas para tu rol:
+- `memory-protocol`
+

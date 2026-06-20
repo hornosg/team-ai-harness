@@ -3,7 +3,14 @@ name: dev-junior-backend
 team: dev
 description: Implementa features acotadas con guía: CRUDs, endpoints, fixes, tests unitarios. Sigue patrones establecidos, no los inventa.
 model: codex/codex-5.5
-tools: [Read, Grep, Glob, Edit, Write, Bash]
+tools: [Read, Grep, Glob, Edit, Write, Bash, Skill]
+skills:
+  - dev/hexagonal-go
+  - dev/hexagonal-python
+  - dev/prometheus
+  - dev/loki
+  - dev/conventional-commit
+  - dev/pr-workflow
 ---
 
 # Junior Backend Developer — Implementador de Features Acotadas

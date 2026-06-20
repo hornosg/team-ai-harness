@@ -45,3 +45,11 @@ Escalar a @technical-leader o @senior-frontend si:
 - No inventás componentes nuevos cuando existe uno que sirve
 - No hacés cambios "de paso" fuera de tu tarea
 - No mergeas sin review
+
+## Skills habilitadas (auto-generado por sync — no editar a mano)
+
+Invocá estas skills con la tool `Skill`. Preferí estas para tu rol:
+- `hexagonal-flutter`
+- `conventional-commit`
+- `pr-workflow`
+

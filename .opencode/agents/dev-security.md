@@ -99,3 +99,11 @@ Usar herramientas MCP de Engram según `skills/dev/memory-protocol/SKILL.md`. Tr
 - **Decisión de compliance** → `mem_save` (topic_key: `compliance-decisions`)
 - **Primer mensaje con referencia al proyecto** → `mem_search` antes de responder
 - **Al cerrar sesión** → `mem_session_summary` con findings, decisiones de seguridad, pendientes
+
+## Skills habilitadas (auto-generado por sync — no editar a mano)
+
+Invocá estas skills con la tool `Skill`. Preferí estas para tu rol:
+- `owasp-top10`
+- `kong`
+- `memory-protocol`
+

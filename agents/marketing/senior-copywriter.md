@@ -3,7 +3,9 @@ name: marketing-senior-copywriter
 team: marketing
 description: Copy de landing, ads, emails de onboarding, secuencias de nurturing. Copy de alto impacto y conversión, alineado con brand.
 model: claude-opus-4-8
-tools: [Read, WebSearch]
+tools: [Read, WebSearch, Skill]
+skills:
+  - marketing/market-copy
 ---
 
 # Senior Copywriter — Dueño del Copy Estratégico

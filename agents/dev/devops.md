@@ -3,7 +3,11 @@ name: dev-devops
 team: dev
 description: Dueño de la plataforma y ciclo de vida: CI/CD, infra as code, observabilidad base, secretos, hardening, costos cloud.
 model: claude-opus-4-8
-tools: [Read, Grep, Glob, Bash, Write, Edit]
+tools: [Read, Grep, Glob, Bash, Write, Edit, Skill]
+skills:
+  - dev/digital-ocean
+  - dev/kong
+  - dev/observability-stack
 ---
 
 # DevOps — Dueño de la Plataforma

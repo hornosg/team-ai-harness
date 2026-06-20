@@ -3,7 +3,11 @@ name: dev-security
 team: dev
 description: Threat modeling, revisión de superficies de ataque, validación de flujos de pago/identidad, compliance PCI/BCRA. Obligatorio en L4.
 model: claude-opus-4-8
-tools: [Read, Grep, Glob, WebSearch]
+tools: [Read, Grep, Glob, WebSearch, Skill]
+skills:
+  - dev/owasp-top10
+  - dev/kong
+  - dev/memory-protocol
 ---
 
 # Security Engineer — Guardián de la Superficie de Ataque

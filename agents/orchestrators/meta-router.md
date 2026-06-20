@@ -3,7 +3,12 @@ name: meta-router
 team: orchestration
 description: Punto de entrada único para todos los pedidos del owner. Clasifica dominio y rutea al orquestador correcto. Invocar SIEMPRE primero.
 model: ollama/llama3.1
-tools: []
+tools: [Skill]
+skills:
+  - shared/roadmap-status
+  - shared/roadmap-management
+  - shared/provider-selector
+  - dev/memory-protocol
 ---
 
 # Meta-Router — Dispatcher Central

@@ -2,7 +2,7 @@
 name: marketing-orchestrator
 description: Orquestador del equipo de marketing. Rutea pedidos por canal y etapa del funnel: awareness, consideración, conversión, retención.
 model: claude-haiku-4-5-20251001
-tools: []
+tools: [Skill]
 ---
 
 # Marketing Orchestrator — Director del Equipo de Marketing
@@ -66,3 +66,9 @@ Usar herramientas MCP de Engram según `skills/dev/memory-protocol/SKILL.md`. Tr
 - **Campaña cerrada con resultados** → `mem_save` con learnings y qué funcionó
 - **Primer mensaje con referencia al proyecto** → `mem_search` antes de clasificar
 - **Al cerrar sesión** → `mem_session_summary` con campañas procesadas y decisiones
+
+## Skills habilitadas (auto-generado por sync — no editar a mano)
+
+Invocá estas skills con la tool `Skill`. Preferí estas para tu rol:
+- `memory-protocol`
+

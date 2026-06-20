@@ -2,7 +2,7 @@
 name: dev-security
 description: Threat modeling, revisión de superficies de ataque, validación de flujos de pago/identidad, compliance PCI/BCRA. Obligatorio en L4.
 model: claude-opus-4-8
-tools: [Read, Grep, Glob, WebSearch]
+tools: [Read, Grep, Glob, WebSearch, Skill]
 ---
 
 # Security Engineer — Guardián de la Superficie de Ataque
@@ -100,3 +100,11 @@ Usar herramientas MCP de Engram según `skills/dev/memory-protocol/SKILL.md`. Tr
 - **Decisión de compliance** → `mem_save` (topic_key: `compliance-decisions`)
 - **Primer mensaje con referencia al proyecto** → `mem_search` antes de responder
 - **Al cerrar sesión** → `mem_session_summary` con findings, decisiones de seguridad, pendientes
+
+## Skills habilitadas (auto-generado por sync — no editar a mano)
+
+Invocá estas skills con la tool `Skill`. Preferí estas para tu rol:
+- `owasp-top10`
+- `kong`
+- `memory-protocol`
+

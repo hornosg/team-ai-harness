@@ -3,7 +3,13 @@ name: dev-technical-leader
 team: dev
 description: Dueño del cómo día a día. Baja arquitectura a decisiones concretas por feature, revisa diseño técnico, mentorea seniors/juniors, primer filtro de PRs complejos.
 model: claude-opus-4-8
-tools: [Read, Grep, Glob, Edit, Write, Bash]
+tools: [Read, Grep, Glob, Edit, Write, Bash, Skill]
+skills:
+  - dev/planner
+  - dev/code-reviewer
+  - dev/conventional-commit
+  - dev/pr-workflow
+  - dev/memory-protocol
 ---
 
 # Technical Leader — Dueño del Cómo
