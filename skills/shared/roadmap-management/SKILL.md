@@ -48,6 +48,7 @@ Trigger: pedido de trabajo nuevo no reflejado en el roadmap.
    - Tareas concretas (verbos en infinitivo, resultados observables)
    - Criterios de validación auto + manual
    - Ceremony level estimado (L1-L4)
+   - `Detalle de ejecución` (estándar | reforzado — ver más abajo)
 4. Guardar como `management/roadmap/propuestas/PROP-NNN-descripcion-corta.md`
 5. Presentar al owner para aprobación — NO ejecutar sin aprobación explícita para L2+
 
@@ -94,6 +95,32 @@ estado: deprecado
 ## Motivo de deprecación
 [explicación — qué cambió, qué la reemplaza]
 ```
+
+## Estándar de granularidad — tareas ejecutables por modelo abierto
+
+El harness debe correr indistintamente con backing model **frontier** (Claude Opus, Codex) o
+**abierto** (Hermes, Kimi `kimi-k2.7-code:cloud`, otros vía Ollama Cloud). Un modelo abierto NO
+rellena contexto implícito: cada tarea tiene que ser autosuficiente o se cuelga/alucina.
+
+**Regla central:** a menor capacidad del backing model, mayor explicitud del artefacto. El ceremony
+level dice cuánto *proceso*; el `Detalle de ejecución` dice cuánta *especificidad por tarea*.
+
+| Detalle | Cuándo | Cada tarea lleva |
+|---------|--------|------------------|
+| `estándar` | backing frontier | acción + "Hecho cuando" |
+| `reforzado` | backing abierto (Hermes/Kimi/Ollama) | acción + `Objetivo: path` + `Hecho cuando: comando → esperado` + `Depende de` + (L3/L4) `Contrato` |
+
+**Al escribir tareas de una épica (post-aprobación):**
+1. Toda tarea es **atómica** — una acción, un resultado verificable. Si describe una "fase", partila.
+2. Toda tarea tiene **"Hecho cuando"** = comando o check concreto + resultado esperado observable.
+3. En `reforzado`: agregar `Objetivo` (path/módulo exacto) y `Depende de` (orden explícito).
+4. L3/L4 o `reforzado`: agregar `Contrato` (firma pública) — delegar a `skills/dev/planner` para
+   FILE-IDs/TEST-IDs en `workspace/[nombre]/tasks.md`.
+5. Completar **Contexto a cargar** de la épica: lista cerrada de paths a leer. Si un dato no está
+   ahí ni en los archivos linkeados, el ejecutor abierto no lo conoce — explicítalo.
+
+Las **propuestas** quedan livianas (una línea por tarea, acción + resultado). El detalle atómico se
+expande recién en la **épica**, que es lo que se ejecuta.
 
 ## Guardrails
 

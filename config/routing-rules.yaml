@@ -140,11 +140,53 @@ provider_routing:
         default: codex-5.5
 
     ollama:
-      description: Clasificación, ruteo, borradores — bajo costo y latencia
+      description: Modelos abiertos vía Ollama Cloud — clasificación, ruteo, borradores e
+        implementación de bajo/medio riesgo cuando el owner corre el harness sin Anthropic.
       api: ollama_cloud
+      # Nomenclatura Ollama Cloud: los modelos hosteados llevan tag `:cloud`.
       models:
         general: llama3.1
         code: qwen2.5-coder
+        # Hermes (NousResearch) — tuneado para function-calling y structured output.
+        # Mejor que llama3.1 para roles de tool-dispatch (router + orquestadores) y agentes.
+        hermes: hermes3:cloud
+        # Kimi K2 (Moonshot) — MoE fuerte en coding y uso agéntico de tools. Backing actual del owner.
+        kimi: kimi-k2.7-code:cloud
+      # Modelo de backing por defecto cuando se corre el harness sobre Ollama Cloud.
+      default: kimi-k2.7-code:cloud
+
+  # ─── Cómo se resuelve el modelo según el runtime ───────────────────────────
+  # IMPORTANTE: esta matriz por-agente es un CONTRATO DECLARATIVO de intención.
+  # Cuánto se respeta depende del runtime que ejecute el harness:
+  model_resolution:
+    opencode:
+      # OpenCode configura modelo POR AGENTE → la matriz agent_providers se aplica tal cual.
+      respects_per_agent: true
+    claude_code:
+      # Claude Code resuelve el `model:` del frontmatter de cada subagente contra los modelos
+      # que el runtime tiene disponibles. Para usar Ollama Cloud se apunta el runtime a un
+      # endpoint OpenAI-compatible (ANTHROPIC_BASE_URL → gateway/Ollama Cloud), con lo cual
+      # TODOS los subagentes comparten el MISMO modelo de backing global (hoy: kimi-k2.7-code:cloud).
+      respects_per_agent: false
+      backing_model_is_global: true
+      # Consecuencia: bajo Claude Code la calidad NO la da el ruteo por-agente sino la
+      # AUTOSUFICIENCIA de los artefactos. Por eso épicas/tareas se especifican en `reforzado`
+      # (ver roadmap-management → estándar de granularidad) cuando el backing es abierto.
+
+  # ─── Portabilidad por capacidad del modelo ─────────────────────────────────
+  # El harness debe correr con Anthropic Claude, Ollama Hermes y Ollama Kimi indistintamente.
+  capability_tiers:
+    frontier:
+      models: [claude-opus-4-8, codex-5.5]
+      detalle_ejecucion: estándar   # el modelo rellena contexto razonable
+    open_mid:
+      models: [kimi-k2.7-code:cloud, hermes3:cloud, qwen2.5-coder, llama3.1]
+      detalle_ejecucion: reforzado  # tareas atómicas con path + "Hecho cuando" + Contrato
+      # Regla: con backing open_mid, los artefactos se elevan a `reforzado` aunque el ceremony
+      # level sea L1/L2. A menor capacidad del modelo, mayor explicitud del artefacto.
+    note: >
+      L4 sigue exigiendo razonamiento frontier para architect+security. Si el único backing
+      disponible es open_mid, L4 NO se auto-aprueba: se marca y se escala al owner.
 
   # Provider por agente (default — puede ser sobreescrito por ceremony_overrides)
   agent_providers:

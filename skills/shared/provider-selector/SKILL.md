@@ -26,6 +26,17 @@ Determina el provider y modelo óptimo para una tarea, aplicando las reglas de `
 - Keywords de money/auth/compliance presentes → `claude/claude-opus-4-8` inamovible
 - Provider ya fue determinado por `ceremony_overrides` (L3/L4)
 
+## Runtime y backing model (leer primero)
+
+El ruteo por-agente solo se respeta tal cual bajo **OpenCode**. Bajo **Claude Code** todos los
+subagentes comparten un **backing model global** (el que apunte `ANTHROPIC_BASE_URL`; hoy
+`kimi-k2.7-code:cloud` vía Ollama Cloud). Ver `routing-rules.yaml → model_resolution`.
+
+Implicancia: cuando el backing es **open_mid** (Hermes/Kimi/Ollama) la recomendación de provider
+es informativa, pero **el `Detalle de ejecución` de los artefactos pasa a `reforzado`** sí o sí
+(`routing-rules.yaml → capability_tiers`). La calidad la da la autosuficiencia del artefacto, no el
+modelo. L4 nunca se auto-aprueba sobre open_mid: se marca y escala al owner.
+
 ## Paso 1 — Leer configuración
 
 ```
@@ -73,6 +84,8 @@ Dado provider y complejidad de la tarea:
 | codex | default | codex-5.5 | cualquier task de `code_generation` |
 | ollama | general | llama3.1 | clasificación, borradores, ruteo |
 | ollama | code | qwen2.5-coder | fixes simples si se prefiere Ollama sobre Codex |
+| ollama | hermes | hermes3:cloud | router + orquestadores (function-calling confiable); agentes de tool-dispatch |
+| ollama | kimi | kimi-k2.7-code:cloud | backing abierto de propósito general — coding + agéntico (default Ollama Cloud actual) |
 
 ## Paso 5 — Emitir recomendación
 

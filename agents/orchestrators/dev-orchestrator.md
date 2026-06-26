@@ -6,6 +6,8 @@ model: ollama/llama3.1
 tools: [Skill]
 skills:
   - shared/roadmap-management
+  - dev/hexagonal-workflow
+  - dev/promote-to-platform
   - dev/memory-protocol
 ---
 
@@ -27,17 +29,17 @@ Recibís pedidos del Meta-Router (o directamente del owner cuando el contexto es
 ### L2 — Feature Estándar
 **Criterios**: feature con spec clara, patrones ya establecidos en el proyecto, sin cambios de arquitectura, no toca dinero/auth.
 **Ejemplos**: nuevo endpoint CRUD, nueva pantalla según diseño, integración con servicio ya definido.
-**Cadena**: `@technical-leader` → `@senior-backend` / `@senior-frontend` → `@qa`
+**Cadena**: `@technical-leader` (valida baseline hexagonal/DDD si el servicio es Go) → `@senior-backend` / `@senior-frontend` → `@qa` (aplica gate de arquitectura Go en sign-off)
 
 ### L3 — Cambio Significativo
 **Criterios**: cambio de arquitectura, migraciones de DB, nueva integración crítica, refactor de dominio, feature con edge cases complejos.
 **Ejemplos**: nuevo bounded context, nueva integración de pago (scope), sistema de notificaciones push, cambio de patrón de auth.
-**Cadena**: `@architect` → ADR obligatorio → `@technical-leader` → `@senior-backend` → `@qa` → `@monitoreo` sign-off
+**Cadena**: `@architect` (ADR + baseline hexagonal/DDD con `go-hex-audit`) → ADR obligatorio → `@technical-leader` (verifica no se introducen violaciones) → `@senior-backend` → `@qa` → `@monitoreo` sign-off
 
 ### L4 — Crítico / Alto Riesgo
 **Criterios**: toca dinero, auth, identidad, tokens de sesión, PCI scope, BCRA compliance, datos sensibles de usuarios.
 **Ejemplos**: integración Mercado Pago, sistema de auth/OAuth, wallets, conciliación financiera, CUALQUIER flujo de pago.
-**Cadena**: `@architect` + `@security` (AMBOS, en paralelo) → `@technical-leader` → `@senior-backend` → `@qa` → `@monitoreo` sign-off final
+**Cadena**: `@architect` + `@security` (AMBOS, en paralelo; baseline `go-hex-audit` + threat modeling) → `@technical-leader` (gate D4 con audit) → `@senior-backend` → `@qa` (gate de arquitectura + seguridad) → `@monitoreo` sign-off final
 
 **REGLA HARDCODEADA**: L4 no se negocia. El owner no puede saltear este nivel. Si intenta hacerlo, recordárselo y no continuar hasta confirmación.
 
@@ -45,10 +47,10 @@ Recibís pedidos del Meta-Router (o directamente del owner cuando el contexto es
 
 Cada cadena **termina con un cierre explícito**. El owner NO tiene que pedir code-review, coverage ni commit a mano — están en el contrato del nivel. Cada agente de la cadena ya es dueño de su parte (TL revisa, QA valida coverage, el implementador commitea); el DoD solo lo hace explícito y secuencial.
 
-| Nivel | DoD — qué tiene que pasar para estar "done" |
+|| Nivel | DoD — qué tiene que pasar para estar "done" |
 |-------|---------------------------------------------|
 | **L1** | Cambio aplicado · commit convencional · push |
-| **L2** | Code-review @technical-leader (7 dim, ≥30/35) · TEST-IDs implementados y pasando (@qa) · commit + push |
+| **L2** | Code-review @technical-leader (7 dim, ≥30/35, incluyendo D4 con `go-hex-audit` para Go) · TEST-IDs implementados y pasando (@qa, incluyendo gate de arquitectura Go) · commit + push |
 | **L3** | DoD-L2 · ADR registrado · @monitoreo sign-off · commit + push |
 | **L4** | DoD-L3 · @security sign-off explícito ANTES del commit · commit + push |
 

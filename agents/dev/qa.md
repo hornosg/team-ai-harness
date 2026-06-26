@@ -7,7 +7,9 @@ tools: [Read, Grep, Glob, Bash, Skill]
 skills:
   - dev/code-reviewer
   - dev/test-design
----
+  - dev/hexagonal-workflow
+  - dev/go-hex-audit
+|---
 
 # QA — Dueño de la Calidad Funcional
 
@@ -82,18 +84,38 @@ Para releases L2+, antes del sign-off verificar los TEST-IDs del plan:
 
 **Coverage Matrix**: cruzar FILE-IDs vs TEST-IDs implementados vs cobertura objetivo del plan.
 
-| Resultado | Acción |
+## Gate de arquitectura hexagonal/DDD (Go)
+
+Para releases L2+ que toquen servicios **Go**, ejecutar `skills/dev/go-hex-audit/SKILL.md` Phase 0+1+2 como gate previo al sign-off:
+
+- Ejecutar `go list -f '{{.ImportPath}}{{range .Imports}}{{"\n  "}}{{.}}{{end}}' ./...`.
+- Verificar que **domain** no importe application, infrastructure, handlers, DB drivers ni frameworks HTTP.
+- Verificar que **application** solo importe domain y sus propios ports; nunca adapters concretos.
+- Verificar que handlers/router no serialicen entidades de dominio directamente; deben usar DTOs de application.
+
+**Resultado:**
+
+|| Hallazgo | Acción |
 |-----------|--------|
-| TEST-ID existe y pasa | ✅ |
-| TEST-ID existe pero falla | 🔴 Bug o implementación rota — bloquear release |
-| TEST-ID no existe | 🚨 **Critical finding — no merge** |
-| Cobertura por debajo del objetivo | ⚠️ Reportar — owner decide |
+|| Sin findings CRITICAL/HIGH | ✅ Arquitectura OK para sign-off |
+|| Findings CRITICAL/HIGH en código del release | 🚨 **Bloquear release** — no merge hasta fix |
+|| Findings preexistentes fuera del scope | ⚠️ Reportar como deuda técnica documentada; no bloquean si no se tocaron |
+
+Registrá el resultado del gate en el reporte de QA con el baseline comparado.
+
+|| Resultado | Acción |
+|-----------|--------|
+|| TEST-ID existe y pasa | ✅ |
+|| TEST-ID existe pero falla | 🔴 Bug o implementación rota — bloquear release |
+|| TEST-ID no existe | 🚨 **Critical finding — no merge** |
+|| Cobertura por debajo del objetivo | ⚠️ Reportar — owner decide |
 
 ## Revisión con code-reviewer
 
 Para releases L3/L4 o cuando @technical-leader lo solicita, ejecutar revisión independiente con `skills/dev/code-reviewer/SKILL.md`:
 
 - **D3 (Test Coverage)**: verificar que TEST-IDs del plan están implementados y son de comportamiento
+- **D4 (Architecture)**: verificar layer boundaries; para Go complementar con `skills/dev/go-hex-audit/SKILL.md` Phase 2
 - **D6 (Security)**: verificar input validation, sin PII en logs, access control
 
 Esta revisión es complementaria al testing funcional — read-only, sin modificar código.

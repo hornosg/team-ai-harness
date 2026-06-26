@@ -53,6 +53,57 @@ Owner
 - **Roadmap integration** — agents read `roadmap/roadmap.yaml` to contextualize requests. `@meta-router status` crosses roadmap + proposals + OpenSpec specs into one report.
 - **Multi-adapter sync** — one canonical source in `agents/` generates outputs for Claude Code (`.claude/agents/`), OpenCode (`.opencode/agents/`), Cursor (`.cursor/rules/`), and Copilot (`.github/agents/`).
 - **Persistent memory** — all senior agents use [Engram](https://github.com/Gentleman-Programming/engram) to persist architectural decisions, bug resolutions, and session context across conversations.
+- **Open model support** — runs on Anthropic Claude, Ollama Hermes, or Kimi K2 without code changes. Artifact granularity auto-adjusts via `Detalle de ejecución`.
+
+---
+
+## Open Model Compatibility (Hermes / Kimi / Ollama Cloud)
+
+The harness runs on **Anthropic Claude**, **Ollama Hermes**, or **Kimi K2** without any code change. Provider selection is configured in `config/routing-rules.yaml`.
+
+### Capability tiers
+
+| Tier | Models | Artifact detail |
+|------|--------|-----------------|
+| `frontier` | `claude-opus-4-8`, `codex-5.5` | `estándar` — model fills in reasonable context |
+| `open_mid` | `kimi-k2.7-code:cloud`, `hermes3:cloud`, `qwen2.5-coder`, `llama3.1` | `reforzado` — tasks must be atomic and self-contained |
+
+**Rule**: the lower the model capacity, the higher the artifact explicitness. `reforzado` means every epic task must include an `Objetivo:` (exact path), a `Hecho cuando:` (observable result), and optionally a `Contrato:` (exact signature, required in L3/L4).
+
+### Detalle de ejecución
+
+Epics and proposals carry a `Detalle de ejecución: estándar | reforzado` field. This is orthogonal to ceremony level:
+
+- **`estándar`** — frontier models (Claude Opus, Codex). Natural language tasks are fine; the model fills context gaps.
+- **`reforzado`** — open models (Hermes, Kimi, Ollama Cloud). Every task is atomic:
+
+```markdown
+- [ ] **T1 · [verb + concrete object]**
+      Objetivo: `exact/path/to/file`
+      Hecho cuando: `go test ./...` → green (or observable check)
+      Depende de: ninguna
+      Contrato: `func Name(ctx context.Context, id string) (Entity, error)`  ← L3/L4 only
+```
+
+### Runtime behavior under Claude Code vs OpenCode
+
+| Runtime | Per-agent model routing | Consequence |
+|---------|------------------------|-------------|
+| **OpenCode** | ✅ yes — each agent uses its declared `model:` | Provider matrix in `routing-rules.yaml` is fully respected |
+| **Claude Code** | ❌ no — all subagents share a single global backing model (`ANTHROPIC_BASE_URL`) | Quality depends on artifact self-sufficiency, not routing. Use `reforzado` when backing is open_mid. |
+
+**L4 on open_mid backing**: architect and security agents require frontier reasoning. If the only available backing is open_mid, L4 does NOT auto-execute — it is flagged and escalated to the owner.
+
+### Adding Ollama / Kimi as backing in Claude Code
+
+Point `ANTHROPIC_BASE_URL` to your Ollama Cloud gateway before launching:
+
+```bash
+export ANTHROPIC_BASE_URL=https://your-ollama-cloud-gateway/v1
+claude
+```
+
+Ollama Cloud model names use the `:cloud` tag (e.g. `hermes3:cloud`, `kimi-k2.7-code:cloud`). See `config/routing-rules.yaml → providers.ollama.models`.
 
 ---
 
@@ -244,12 +295,41 @@ team-ai-harness/
 │   └── cross-domain-pipelines.yaml
 ├── scripts/
 │   ├── sync-agents.sh             ← generates adapter outputs
-│   └── install-management.sh      ← installer for any project
+│   ├── install-management.sh      ← installer for any project
+│   └── validate-artifacts.py      ← conformance checker (routing + templates + reforzado epics)
 ├── .claude/agents/                ← generated for Claude Code
 ├── .opencode/agents/              ← generated for OpenCode
 ├── AGENTS.md                      ← full agent roster + flow diagram
 └── PROJECT.md                     ← project identity template
 ```
+
+---
+
+## Validation
+
+`scripts/validate-artifacts.py` checks harness conformance without running any agent. It requires only Python 3 (and optionally PyYAML for richer YAML checks).
+
+```bash
+# Validate the canonical harness (config + templates + all reforzado epics found)
+python3 scripts/validate-artifacts.py
+
+# Validate a specific installed management/ folder
+python3 scripts/validate-artifacts.py /path/to/project/management
+
+# Validate specific epic files only
+python3 scripts/validate-artifacts.py --epics roadmap/epicas/E10.md roadmap/epicas/E18.md
+```
+
+**What it checks:**
+
+| Check | What passes |
+|-------|-------------|
+| `config/routing-rules.yaml` | Has `model_resolution`, `capability_tiers`, and declares `hermes` + `kimi` under ollama |
+| Epic template | Has `## Contexto a cargar`, `Detalle de ejecución`, and `Hecho cuando` |
+| Proposal template | Has `Detalle de ejecución` |
+| Reforzado epics | Every task in `## Tareas` has `Objetivo:` and `Hecho cuando:` |
+
+Exit 0 = all pass. Exit 1 = one or more failures (CI-safe).
 
 ---
 
@@ -276,6 +356,7 @@ team-ai-harness/
 | Shared | `bmad-review-adversarial` | Cynical reviewer, minimum 10 findings |
 | Shared | `roadmap-management` | Create proposals, epics, update roadmap |
 | Shared | `roadmap-status` | Full status report: roadmap + proposals + specs |
+| Shared | `provider-selector` | Select optimal provider+model for any agent/task combination |
 | Hexagonal | `hexagonal-go` | Hexagonal + DDD para Go (Chi/pgx/Wire) |
 | Hexagonal | `hexagonal-python` | Hexagonal + DDD para Python (FastAPI/SQLAlchemy async) |
 | Hexagonal | `hexagonal-flutter` | Clean Architecture + DDD para Flutter (BLoC/Riverpod) |

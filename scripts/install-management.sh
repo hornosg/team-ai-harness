@@ -357,15 +357,23 @@ if [[ -d "$SOURCE/adapters" ]]; then
 fi
 
 # ─── 5b. Copiar roadmap/ ─────────────────────────────────────────────────────
+# roadmap.yaml es CONTENIDO DEL USUARIO (hitos/épicas reales): igual que PROJECT.md,
+# NO se pisa en --upgrade. Solo se copia en install fresh o si no existe. Los
+# templates (_TEMPLATE.md, README.md) sí se refrescan siempre (no son contenido).
 step "Copiando roadmap/"
 if [[ -d "$SOURCE/roadmap" ]]; then
   mkdir -p "$MGMT_DIR/roadmap/epicas" "$MGMT_DIR/roadmap/propuestas"
-  cp "$SOURCE/roadmap/roadmap.yaml" "$MGMT_DIR/roadmap/"
+  if [[ "$UPGRADE" == false || ! -f "$MGMT_DIR/roadmap/roadmap.yaml" ]]; then
+    cp "$SOURCE/roadmap/roadmap.yaml" "$MGMT_DIR/roadmap/"
+    ok "roadmap.yaml (template) — completar con hitos y épicas reales"
+  else
+    warn "roadmap.yaml preservado (--upgrade no pisa contenido del usuario)"
+  fi
   cp "$SOURCE/roadmap/README.md" "$MGMT_DIR/roadmap/"
   cp "$SOURCE/roadmap/epicas/_TEMPLATE.md" "$MGMT_DIR/roadmap/epicas/"
   cp "$SOURCE/roadmap/propuestas/_TEMPLATE.md" "$MGMT_DIR/roadmap/propuestas/"
   cp "$SOURCE/roadmap/propuestas/README.md" "$MGMT_DIR/roadmap/propuestas/"
-  ok "roadmap/ → roadmap.yaml + templates de épicas y propuestas"
+  ok "roadmap/ → templates de épicas y propuestas refrescados"
 fi
 
 # ─── 6. Copiar AGENTS.md ─────────────────────────────────────────────────────

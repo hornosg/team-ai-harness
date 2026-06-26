@@ -90,6 +90,17 @@ Cada agente declara su modelo en el frontmatter (`model:`) y justifica la elecci
 
 `sync-agents.sh` valida que todo `model:` esté en la allowlist vigente y avisa si encuentra un string desconocido.
 
+## SDD: proceso y artefacto
+
+En este repo **SDD significa ambas cosas y se refuerzan mutuamente**:
+
+| Sigla | Significado | Rol en el workflow |
+|---|---|---|
+| **SDD (proceso)** | **Specification-Driven Development** — primero se define el contrato/comportamiento, luego se programa. | Filosofía de trabajo: ninguna implementación L2+ arranca sin spec aprobada. |
+| **SDD (artefacto)** | **System Design Document** — documento con contexto, arquitectura, decisiones y contratos. | La memoria externa del sistema: ADRs, `tasks.md`, plan atómico, workflow. |
+
+Para un solo desarrollador con agentes, esta combinación evita *scope creep* y programar "de memoria". El agente actúa como implementador, pero la spec la decidimos antes.
+
 ## Flujo de Documentos
 
 Quién genera qué. Cada documento tiene un dueño único.
@@ -105,7 +116,7 @@ Owner
   │                                                              [product-orchestrator]
   │                                                                       │
   │                                                               [product-owner]
-  │                                                               PROP-NNN.md ──── borrador
+  │                                                               PROP-NNN.md ←── Spec de alto nivel
   │                                                                       │           │
   │                                                                  aprobada    rechazada
   ▼                                                                       │
@@ -116,6 +127,9 @@ Owner
   │                                                              [dev-orchestrator]
   │                                                              ENN epic en roadmap.yaml
   │                                                              roadmap/epicas/ENN-*.md
+  │                                                                       │
+  │                                  Story opcional (impacto de usuario)  │
+  │                                  roadmap/stories/STOR-NNN.md          │
   │                                                                       │
   ├─ L3/L4 → [architect] ◄──────────────────────────────────────────────┘
   │            ADR-XX.md (docs/adr/)                                     │
@@ -147,7 +161,7 @@ Owner
   code review 7 dimensiones (skills/dev/code-reviewer/SKILL.md)
   D1: FILE-IDs creados según plan
   D3: TEST-IDs implementados
-  D4: layer boundaries respetados
+  D4: layer boundaries respetadas
   D6: security checks
   Score /35 → APPROVED ≥30 | REVISIONS <25
   │
@@ -164,11 +178,13 @@ Owner
 
 | Documento | Dueño | Cuándo |
 |-----------|-------|--------|
-| `PROP-NNN.md` | `product-owner` | Discovery / idea nueva |
-| `roadmap/epicas/ENN-*.md` | `dev-orchestrator` / `product-orchestrator` | Propuesta aprobada |
+| `PROP-NNN.md` | `product-owner` | Discovery / idea nueva. Spec de alto nivel: problema, para quién, criterios de aceptación. |
+| `roadmap/epicas/ENN-*.md` | `dev-orchestrator` / `product-orchestrator` | Propuesta aprobada. Spec de alcance: objetivo, stories opcionales, dependencias, ceremony level. |
+| `roadmap/stories/STOR-NNN.md` | `product-owner` / `dev-orchestrator` | Cuando la épica impacta comportamiento observable del usuario. Opcional para trabajo técnico puro. |
 | `roadmap/roadmap.yaml` | orchestrators | Al crear / actualizar épica |
 | `docs/adr/ADR-XX.md` | `architect` | Decisión estructural L3/L4 |
 | `openspec/changes/[name]/tasks.md` | `architect` (L3/L4) / `technical-leader` (L2/L3) | Antes de codear |
+| `management/plans/<project>/<timestamp>_<slug>.md` | `dev-orchestrator` / owner | Plan atómico cross-project o multi-servicio. Vinculado desde épica/tasks. |
 | FILE-IDs (F-NNN) | `architect` / `technical-leader` | En tasks.md |
 | TEST-IDs (T-NNN) | `architect` / `technical-leader` | En tasks.md |
 | Código | `senior-backend` / `senior-frontend` | Implementación |
@@ -251,3 +267,10 @@ engram setup opencode
 
 Engram provee memoria persistente compartida entre todos los agentes y sesiones.
 Los agentes usan `mem_save` para persistir decisiones importantes, ADRs, y contexto de proyecto.
+
+## Documentos clave del workflow
+
+- `docs/sdd-specification-driven.md` — marco SDD (proceso + artefacto) y Story.
+- `docs/workflow-hexagonal-ddd.md` — flujo Go con `go-hex-audit`.
+- `skills/dev/hexagonal-workflow/SKILL.md` — skill canónica del flujo Go.
+- `.hermes/plans/INDEX.md` — planes atómicos vinculados.

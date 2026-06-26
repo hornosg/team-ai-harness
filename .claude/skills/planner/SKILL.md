@@ -199,6 +199,17 @@ Escribir el plan en `workspace/[nombre]/tasks.md`. Presentar al owner. Pedir apr
 | L3 | Sí | Completo | Completo | Sí | Skip |
 | L4 | Sí | Formal + contratos | Formal + security cases | Sí | Sí |
 
+## Backing model abierto → subir un escalón de detalle
+
+Si el harness corre sobre un backing **open_mid** (Hermes / Kimi `kimi-k2.7-code:cloud` / Ollama
+Cloud — ver `config/routing-rules.yaml → capability_tiers`), el implementador no rellena contexto
+implícito. Subí el detalle un nivel respecto del ceremony level:
+- **L2 sobre open_mid** → tratá los FILE-IDs como L3 (todos los archivos, no solo los clave) y
+  agregá `Contrato` por FILE-ID (firma exacta), que normalmente sería L3.
+- **L3 sobre open_mid** → agregá los contratos formales y edge cases que serían L4.
+- Cada TEST-ID lleva el **comando exacto** y el **resultado esperado**, no una descripción.
+Esto es el equivalente, a nivel `tasks.md`, del `Detalle de ejecución: reforzado` de las épicas.
+
 ## Guardrails
 
 - **NUNCA empezar a codear** — solo planificar

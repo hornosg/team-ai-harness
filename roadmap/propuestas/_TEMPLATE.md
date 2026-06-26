@@ -7,6 +7,7 @@
 **Épica:** E[NN] (o "nueva" si propone crear una)
 **Prioridad:** critica | alta | media | baja
 **Ceremony level:** L[1-4]
+**Detalle de ejecución:** estándar | reforzado  ← reforzado si se ejecutará con backing model abierto (Hermes/Kimi/Ollama)
 **Spec:** — (se completa al aprobar → `openspec/changes/[nombre-kebab]`)
 
 ## Qué
@@ -25,9 +26,12 @@ Motivación y contexto. ¿Qué problema resuelve? ¿Qué pasa si no se hace?
 
 ## Tareas estimadas
 
-- [ ] Tarea 1
-- [ ] Tarea 2
-- [ ] Tarea 3
+> Nivel propuesta: una línea por tarea, **acción + resultado observable** (no hace falta path/firma todavía).
+> Al aprobar, la épica las expande a tareas atómicas verificables (ver `epicas/_TEMPLATE.md → Tareas`).
+
+- [ ] [Verbo + objeto → resultado observable] (ej: "Agregar endpoint POST /x → devuelve 201 con la entidad")
+- [ ] [Tarea]
+- [ ] [Tarea]
 
 ## Criterios de validación
 
