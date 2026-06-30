@@ -6,7 +6,7 @@ Cada adapter transforma los assets canónicos de `management/` al formato nativo
 
 | Adapter | Agentes | Rules | Skills | Context file | MCP config |
 |---------|---------|-------|--------|--------------|-----------|
-| **Claude Code** | `.claude/agents/*.md` | — | vía CLAUDE.md | `CLAUDE.md → @management/CLAUDE.md` | `.claude/settings.local.json` |
+| **Claude Code** | `.claude/agents/*.md` | — | vía CLAUDE.md | `CLAUDE.md → @management/CLAUDE.md` | `.claude/settings.local.json` (Engram MCP auto-wired by installer) |
 | **OpenCode** | `.opencode/agents/*.md` | — | vía CLAUDE.md | — | — |
 | **Cursor** | — | `.cursor/rules/*.mdc` | `.cursor/rules/*.mdc` | `.cursorrules` | `.cursor/mcp.json` |
 | **Copilot** | `.github/agents/*.agent.md` | `.github/instructions/*.instructions.md` | — | `.github/copilot-instructions.md` | `.github/copilot-mcp.json` |

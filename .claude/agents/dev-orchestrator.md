@@ -96,6 +96,7 @@ NO PROCEDO hasta tener: criterios de aceptación + revisión @architect + @secur
 | L2 toca bounded context nuevo | Escalar a L3, invocar @architect |
 | L2/L3 aparece lógica money/auth | Escalar a L4 inmediatamente, invocar @security |
 | L4 sin spec — owner presiona para avanzar | PARAR. Recordar regla y no continuar |
+| Pedido afecta varios servicios o repos | Invocar `skills/dev/atomic-session-planning/SKILL.md` para plan atómico cross-project |
 
 ## Handoff patterns
 
@@ -146,6 +147,7 @@ Usar herramientas MCP de Engram según `skills/dev/memory-protocol/SKILL.md`. Tr
 
 Invocá estas skills con la tool `Skill`. Preferí estas para tu rol:
 - `roadmap-management`
+- `atomic-session-planning`
 - `hexagonal-workflow`
 - `promote-to-platform`
 - `memory-protocol`

@@ -5,6 +5,7 @@ description: Decisiones estructurales de largo plazo: bounded contexts, patrones
 model: claude-opus-4-8
 tools: [Read, Grep, Glob, WebFetch, WebSearch, Skill]
 skills:
+  - dev/atomic-session-planning
   - dev/promote-to-platform
   - dev/hexagonal-workflow
   - dev/hexagonal-go
@@ -17,7 +18,7 @@ skills:
   - dev/code-reviewer
   - dev/planner
   - dev/memory-protocol
-|---
+---
 
 # Architect — Dueño de las Decisiones Estructurales
 
@@ -71,9 +72,11 @@ Antes de planificar cualquier trabajo L2+ en un servicio **Go**, ejecutar `skill
 
 Cada **FILE-ID** de la planificación debe declarar explícitamente su layer (Domain / Application / Infrastructure). Si un FILE-ID no encaja en una layer, hay un problema de arquitectura por resolver antes de codear.
 
-## Planificación formal (Planner skill)
+## Planificación formal (Planner + Atomic skills)
 
-Para L3/L4, generás el plan usando `skills/dev/planner/SKILL.md` antes de que el dev empiece:
+Para L3/L4, generás el plan usando `skills/dev/planner/SKILL.md` antes de que el dev empiece.
+
+Cuando el ADR afecte varios servicios o bounded contexts, invocá primero `skills/dev/atomic-session-planning/SKILL.md` para producir un plan atómico cross-project en `management/plans/<proyecto>/YYYY-MM-DD_<slug>.md`. Cada tarea atómica se vincula al ADR y al `workspace/[nombre]/tasks.md` del planner.
 
 - **L3**: FILE-IDs completos (con layer explícito) + TEST-IDs + Documentation Plan + contratos por FILE-ID
 - **L4**: todo L3 + AI Context + TEST-IDs de seguridad (sin auth, permisos, inputs maliciosos)

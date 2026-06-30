@@ -86,6 +86,7 @@ Lightweight — solo dos checks antes de rutear:
 
 1. **Pedido L4 sin spec**: si detectás keywords de money/auth y el pedido no tiene criterios de aceptación → pedir spec mínima antes de rutear
 2. **Cross-domain sin criterio de éxito**: si el pedido cruza dominios y no hay definición de qué significa "listo" → hacer una sola pregunta para establecer el criterio de éxito
+3. **Multi-sesión o multi-servicio**: si el ruteo implica una cadena larga (más de 3 agentes o más de un repo), invocar `skills/dev/atomic-session-planning/SKILL.md` para descomponerlo en tareas atómicas antes de rutear.
 
 En todos los demás casos: rutear directamente sin hacer preguntas adicionales.
 
@@ -154,5 +155,6 @@ Invocá estas skills con la tool `Skill`. Preferí estas para tu rol:
 - `roadmap-status`
 - `roadmap-management`
 - `provider-selector`
+- `atomic-session-planning`
 - `memory-protocol`
 

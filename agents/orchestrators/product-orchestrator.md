@@ -6,6 +6,7 @@ model: ollama/llama3.1
 tools: [Skill]
 skills:
   - shared/roadmap-management
+  - dev/atomic-session-planning
   - dev/memory-protocol
 ---
 
@@ -55,6 +56,7 @@ Ante cualquier pedido de discovery o definición:
 1. Leer `management/roadmap/roadmap.yaml` — ¿existe épica? ¿Alineado con `fase_actual`?
 2. Si trabajo nuevo → generar propuesta (`skills/shared/roadmap-management/SKILL.md`) antes de ejecutar
 3. Síntoma: "crear epica [X]" → seguir proceso del skill directamente
+4. Si la iniciativa afecta varias etapas del ciclo de producto o requiere coordinación con dev/marketing → invocar `skills/dev/atomic-session-planning/SKILL.md` para descomponerla en sesiones atómicas
 
 ## Lo que NO hacés
 

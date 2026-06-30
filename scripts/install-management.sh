@@ -348,6 +348,14 @@ SYNC_EOF
 chmod +x "$MGMT_DIR/scripts/sync-agents.sh"
 ok "management/scripts/sync-agents.sh"
 
+# ─── 4d. Copiar helper de merge de settings.local.json ───────────────────────
+step "Copiando helper de settings.local.json"
+if [[ -f "$SOURCE/scripts/merge-claude-settings.py" ]]; then
+  cp "$SOURCE/scripts/merge-claude-settings.py" "$MGMT_DIR/scripts/"
+  chmod +x "$MGMT_DIR/scripts/merge-claude-settings.py"
+  ok "management/scripts/merge-claude-settings.py"
+fi
+
 # ─── 4c. Copiar adapters/ ────────────────────────────────────────────────────
 step "Copiando adapters/"
 if [[ -d "$SOURCE/adapters" ]]; then
@@ -423,7 +431,7 @@ management/
 ├── AGENTS.md           # Índice de agentes
 ├── agents/             # 32 agentes canónicos
 ├── skills/
-│   ├── dev/            # code-reviewer, owasp, conventional-commit, pr-workflow, memory-protocol
+│   ├── dev/            # code-reviewer, owasp, conventional-commit, pr-workflow, memory-protocol, atomic-session-planning
 │   ├── marketing/      # market-audit, market-seo, market-copy, market-cro, market-competitors
 │   └── shared/         # bmad-*, roadmap-management, roadmap-status
 ├── rules/              # architecture.md, api-standards.md, security.md
@@ -434,7 +442,8 @@ management/
 ├── adapters/           # Formatos para Claude Code, OpenCode, Cursor, Copilot
 ├── config/
 └── scripts/
-    └── sync-agents.sh  # Genera adapters configurados
+    ├── sync-agents.sh          # Genera adapters configurados
+    └── merge-claude-settings.py # Configura Engram MCP si se instala después
 ```
 
 ## Ceremony levels
@@ -459,10 +468,25 @@ El sync-agents.sh genera formatos para múltiples herramientas:
 3. `@meta-router status` para ver el estado inicial
 4. `@meta-router [cualquier pedido]` para empezar a trabajar
 
+## Planes atómicos
+
+Para iniciativas que requieran varias sesiones o afecten más de un servicio, usá `skills/dev/atomic-session-planning/SKILL.md`.
+
+- Planes cross-project: `~/Projects/management/plans/<proyecto>/YYYY-MM-DD_<slug>.md`
+- Índice local: `.claude/plans/INDEX.md`
+
+Una sola tarea `in_progress` por sesión; el handoff se guarda en Engram.
+
 ## Memoria persistente (Engram)
 
 Agentes Opus/Sonnet guardan decisiones entre sesiones via Engram MCP.
 Ver `management/skills/dev/memory-protocol/SKILL.md`.
+
+Si Engram no estaba instalado al correr el installer, instalalo con `brew install gentleman-programming/tap/engram` y luego ejecutá:
+
+```bash
+python3 management/scripts/merge-claude-settings.py .
+```
 CLAUDE_EOF
   ok "management/CLAUDE.md"
 fi
@@ -489,6 +513,49 @@ ROOT_EOF
   ok "CLAUDE.md creado"
 fi
 
+# ─── 9b. Configurar Engram MCP ─────────────────────────────────────────────────
+step "Configurando Engram MCP"
+if command -v engram &> /dev/null; then
+  ENGRAM_VERSION="$(engram --version 2>/dev/null || echo 'desconocida')"
+  ok "Engram detectado ($ENGRAM_VERSION)"
+  if [[ -f "$MGMT_DIR/scripts/merge-claude-settings.py" ]]; then
+    python3 "$MGMT_DIR/scripts/merge-claude-settings.py" "$TARGET"
+    ok "MCP Engram registrado en .claude/settings.local.json"
+  else
+    warn "Helper merge-claude-settings.py no encontrado — MCP no configurado"
+  fi
+else
+  warn "Engram no está en PATH"
+  warn "Para activar la memoria persistente, instalalo con:"
+  warn "  brew install gentleman-programming/tap/engram"
+  warn "Luego ejecutá: python3 management/scripts/merge-claude-settings.py ."
+fi
+
+# ─── 9c. Crear índice local de planes atómicos ─────────────────────────────────
+step "Creando índice de planes atómicos"
+PROJECT_SLUG="$(basename "$TARGET")"
+mkdir -p "$TARGET/.claude/plans"
+cat > "$TARGET/.claude/plans/INDEX.md" << 'INDEX_EOF'
+# Planes atómicos vinculados a este proyecto
+
+Los planes concretos viven en `~/Projects/management/plans/PROJECT_SLUG/`.
+Este archivo es solo un índice local.
+
+## Planes activos
+
+| Plan | Archivo | Descripción | Estado |
+|------|---------|-------------|--------|
+| —    | —       | —           | —      |
+
+## Cómo agregar un plan
+
+1. Crear `~/Projects/management/plans/PROJECT_SLUG/YYYY-MM-DD_<slug>.md`.
+2. Seguir `skills/dev/atomic-session-planning/SKILL.md`.
+3. Actualizar la tabla de este índice.
+INDEX_EOF
+sed -i '' "s/PROJECT_SLUG/${PROJECT_SLUG}/g" "$TARGET/.claude/plans/INDEX.md"
+ok ".claude/plans/INDEX.md"
+
 # ─── 10. Sync inicial ─────────────────────────────────────────────────────────
 step "Ejecutando sync inicial de agentes"
 bash "$MGMT_DIR/scripts/sync-agents.sh"
@@ -501,6 +568,11 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo ""
 echo "  management/PROJECT.md   ← completar con datos del proyecto"
 echo "  management/CLAUDE.md    ← personalizar si hace falta"
+if command -v engram &> /dev/null; then
+  echo "  .claude/settings.local.json ← MCP Engram activado"
+else
+  echo "  ⚠ Engram no instalado — memoria persistente desactivada"
+fi
 echo ""
 echo "  Próximos pasos:"
 echo "  1. Editar management/PROJECT.md"

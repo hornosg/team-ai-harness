@@ -97,7 +97,7 @@ En este repo **SDD significa ambas cosas y se refuerzan mutuamente**:
 | Sigla | Significado | Rol en el workflow |
 |---|---|---|
 | **SDD (proceso)** | **Specification-Driven Development** — primero se define el contrato/comportamiento, luego se programa. | Filosofía de trabajo: ninguna implementación L2+ arranca sin spec aprobada. |
-| **SDD (artefacto)** | **System Design Document** — documento con contexto, arquitectura, decisiones y contratos. | La memoria externa del sistema: ADRs, `tasks.md`, plan atómico, workflow. |
+| **SDD (artefacto)** | **System Design Document** — documento con contexto, arquitectura, decisiones y contratos. | La memoria externa del sistema: ADRs, `tasks.md`, plan atómico (`skills/dev/atomic-session-planning/SKILL.md`), workflow. |
 
 Para un solo desarrollador con agentes, esta combinación evita *scope creep* y programar "de memoria". El agente actúa como implementador, pero la spec la decidimos antes.
 
@@ -184,7 +184,7 @@ Owner
 | `roadmap/roadmap.yaml` | orchestrators | Al crear / actualizar épica |
 | `docs/adr/ADR-XX.md` | `architect` | Decisión estructural L3/L4 |
 | `openspec/changes/[name]/tasks.md` | `architect` (L3/L4) / `technical-leader` (L2/L3) | Antes de codear |
-| `management/plans/<project>/<timestamp>_<slug>.md` | `dev-orchestrator` / owner | Plan atómico cross-project o multi-servicio. Vinculado desde épica/tasks. |
+| `management/plans/<project>/<timestamp>_<slug>.md` | `dev-orchestrator` / owner | Plan atómico cross-project o multi-servicio (`skills/dev/atomic-session-planning/SKILL.md`). Vinculado desde épica/tasks. |
 | FILE-IDs (F-NNN) | `architect` / `technical-leader` | En tasks.md |
 | TEST-IDs (T-NNN) | `architect` / `technical-leader` | En tasks.md |
 | Código | `senior-backend` / `senior-frontend` | Implementación |

@@ -52,7 +52,8 @@ Owner
 - **Cross-domain pipelines** — launch a feature, run a growth initiative, or manage an incident across Product → Dev → Marketing with a single `@meta-router` command.
 - **Roadmap integration** — agents read `roadmap/roadmap.yaml` to contextualize requests. `@meta-router status` crosses roadmap + proposals + OpenSpec specs into one report.
 - **Multi-adapter sync** — one canonical source in `agents/` generates outputs for Claude Code (`.claude/agents/`), OpenCode (`.opencode/agents/`), Cursor (`.cursor/rules/`), and Copilot (`.github/agents/`).
-- **Persistent memory** — all senior agents use [Engram](https://github.com/Gentleman-Programming/engram) to persist architectural decisions, bug resolutions, and session context across conversations.
+- **Persistent memory** — all senior agents use [Engram](https://github.com/Gentleman-Programming/engram) to persist architectural decisions, bug resolutions, and session context across conversations. The installer wires Engram MCP into `.claude/settings.local.json` automatically.
+- **Atomic session planning** — multi-step or cross-service work is broken into single-session, verifiable tasks with explicit dependencies and Engram handoffs (`skills/dev/atomic-session-planning/SKILL.md`).
 - **Open model support** — runs on Anthropic Claude, Ollama Hermes, or Kimi K2 without code changes. Artifact granularity auto-adjusts via `Detalle de ejecución`.
 
 ---
@@ -117,14 +118,23 @@ Ollama Cloud model names use the `:cloud` tag (e.g. `hermes3:cloud`, `kimi-k2.7-
 | OpenSpec | latest | `npm install -g @fission-ai/openspec@latest` |
 | Engram | latest | `brew install gentleman-programming/tap/engram` |
 
-### Install Engram MCP plugin
+### Engram MCP setup
+
+Engram es el motor de memoria persistente del harness. **Instalalo una sola vez** en la máquina:
 
 ```bash
-# Claude Code
-claude plugin marketplace add Gentleman-Programming/engram
-claude plugin install engram
+brew install gentleman-programming/tap/engram
+```
 
-# OpenCode
+Luego, `./scripts/install-management.sh /path/to/project` configura automáticamente el MCP de Engram en `.claude/settings.local.json` del proyecto destino. Si instalás Engram después del harness, ejecutá:
+
+```bash
+python3 management/scripts/merge-claude-settings.py .
+```
+
+Para OpenCode:
+
+```bash
 engram setup opencode
 ```
 
