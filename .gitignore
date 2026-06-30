@@ -97,13 +97,10 @@ plans/*.md
 plans/**/*.md
 
 .claude/plans/*.md
-!.claude/plans/INDEX.md
+# Nota: INDEX.md se dejó de versionar para evitar exponer nombres de proyectos locales.
+# Se genera automáticamente por install-management.sh. Si se quiere versionar, descomentar:
+# !.claude/plans/INDEX.md
 
 .hermes/plans/*.md
-!.hermes/plans/INDEX.md
-
-# Nota: los índices locales (INDEX.md) se mantienen como plantillas de ejemplo.
-# Si se decide no versionarlos, descomentar las siguientes líneas y correr
-# `git rm --cached .claude/plans/INDEX.md .hermes/plans/INDEX.md`:
-# .claude/plans/INDEX.md
-# .hermes/plans/INDEX.md
+# Nota: igual que arriba — se dejó de versionar el índice local.
+# !.hermes/plans/INDEX.md
