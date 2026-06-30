@@ -1,0 +1,109 @@
+# ─── OS / Editor ───────────────────────────────────────────────────────────────
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+desktop.ini
+
+# ─── IDEs y editores ─────────────────────────────────────────────────────────
+.vscode/settings.json
+.vscode/*.code-workspace
+.idea/
+*.swp
+*.swo
+*~
+*.sublime-*
+
+# ─── Claude Code / OpenCode / Cursor local config ─────────────────────────────
+# Los archivos de settings son por-proyecto y pueden contener preferencias,
+# permissions.allow o incluso futuros mcpServers con datos sensibles.
+.claude/settings.local.json
+.claude/.credentials.json
+.claude/history.jsonl
+.claude/sessions/
+.claude/cache/
+.opencode/settings.json
+.opencode/.credentials.json
+.cursor/settings.json
+
+# Los agentes/skills generados se recrean con sync-agents.sh.
+# Comentar estas líneas solo si se quiere versionar adapters generados.
+# .claude/agents/
+# .claude/skills/
+# .opencode/agents/
+# .opencode/skills/
+# .cursor/rules/
+# .github/agents/
+# .github/instructions/
+
+# ─── Hermes local runtime ─────────────────────────────────────────────────────
+# Hermes guarda sesiones, dumps y cron jobs en su propia estructura.
+# El índice de planes (.hermes/plans/INDEX.md) puede contener nombres de
+# proyectos locales y rutas absolutas; se regenera/actualiza localmente.
+.hermes/sessions/
+.hermes/cron/
+.hermes/config.yaml
+
+# ─── Logs, bases de datos y cachés ─────────────────────────────────────────────
+*.log
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+.cache/
+tmp/
+temp/
+*.tmp
+
+# ─── Memoria episódica local (por proyecto) ────────────────────────────────────
+# Si un proyecto usa memory/ para decisions.jsonl / failures.jsonl,
+# generalmente no debe versionarse por posible PII o datos sensibles.
+memory/
+
+# ─── Dependencias y build artifacts ───────────────────────────────────────────
+node_modules/
+dist/
+build/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.target/
+*.class
+
+# ─── Secrets (defensa en profundidad) ─────────────────────────────────────────
+# Nunca deberían existir en el repo, pero si aparecen accidentalmente
+# git no los trackea.
+.env
+.env.*
+.envrc
+*.pem
+*.key
+*.p12
+*.pfx
+secrets.yaml
+secrets.yml
+secrets.json
+
+# ─── Planes atómicos concretos (cross-project) ─────────────────────────────────
+# Los índices locales (.claude/plans/INDEX.md, .hermes/plans/INDEX.md)
+# apuntan a ~/Projects/management/plans/ que vive fuera de este repo.
+# Los archivos concretos de planes nunca deben versionarse aquí.
+# Se ignoran .md en carpetas de planes, excepto INDEX.md que actúa como índice local.
+management/plans/
+plans/*.md
+plans/**/*.md
+
+.claude/plans/*.md
+!.claude/plans/INDEX.md
+
+.hermes/plans/*.md
+!.hermes/plans/INDEX.md
+
+# Nota: los índices locales (INDEX.md) se mantienen como plantillas de ejemplo.
+# Si se decide no versionarlos, descomentar las siguientes líneas y correr
+# `git rm --cached .claude/plans/INDEX.md .hermes/plans/INDEX.md`:
+# .claude/plans/INDEX.md
+# .hermes/plans/INDEX.md
