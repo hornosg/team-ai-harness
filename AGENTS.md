@@ -1,6 +1,6 @@
 # hornosg-team-ai — Harness de Agentes
 
-Stack: Claude Code · OpenCode · OpenSpec · Engram
+Stack: Claude Code · OpenSpec · Engram (OpenCode dado de baja — docs/adr/ADR-001)
 
 ## Arquitectura
 
@@ -15,11 +15,6 @@ Owner
 ## Cómo usar
 
 ### Claude Code
-```
-@meta-router [pedido]
-```
-
-### OpenCode
 ```
 @meta-router [pedido]
 ```
@@ -222,7 +217,6 @@ agents/           ← fuente canónica (editá aquí)
   product/
   marketing/
 .claude/agents/   ← generado (no editar directamente)
-.opencode/agents/ ← generado (no editar directamente)
 config/
   routing-rules.yaml
   ceremony-levels.yaml
@@ -241,7 +235,7 @@ scripts/
 # 1. Editar el archivo canónico
 vim agents/dev/architect.md
 
-# 2. Sincronizar a Claude Code + OpenCode
+# 2. Sincronizar a Claude Code
 ./scripts/sync-agents.sh
 ```
 
@@ -260,9 +254,6 @@ brew install gentleman-programming/tap/engram
 
 # Claude Code
 claude plugin marketplace add Gentleman-Programming/engram && claude plugin install engram
-
-# OpenCode
-engram setup opencode
 ```
 
 Engram provee memoria persistente compartida entre todos los agentes y sesiones.
