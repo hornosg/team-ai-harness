@@ -108,6 +108,87 @@ Ollama Cloud model names use the `:cloud` tag (e.g. `hermes3:cloud`, `kimi-k2.7-
 
 ---
 
+## Loop mode
+
+The harness can run **unattended iterations** — a driver that repeatedly invokes
+`@meta-router next-task` with fresh context per iteration, no owner in the loop, until the
+backlog is exhausted or a limit is hit. Origin: PROP-008 / E33 (`epicas/E33-agent-loops-harness.md`).
+
+### When to use it
+
+- **Mechanical work with an already-designed pattern** — e.g. applying the same RLS retrofit
+  (`RULE-09`/`RULE-10`) across a fleet of services, one epic per service, same checklist. The
+  epics/tasks already exist in `roadmap.yaml`; the loop just executes them one at a time.
+- Tasks must already be atomic (`skills/dev/atomic-session-planning`) with a verifiable
+  `Hecho cuando` — the loop does not invent scope.
+
+### When NOT to use it
+
+- **Owner-learning work** — e.g. a Kubernetes migration where the explicit goal is that the
+  owner learns the tooling by doing it. A loop that generates the manifests destroys that
+  value. Check the epic/proposal for this kind of intent before looping over it.
+- Work without a clear atomic breakdown yet — plan first (`atomic-session-planning`), loop
+  second.
+
+### How it works
+
+1. `scripts/loop-runner.sh` invokes `claude -p "@meta-router next-task" --max-turns 40` in a
+   loop, each call starting with **fresh context** (no conversation history carried over).
+2. `next-task` (`skills/shared/loop-next-task/SKILL.md`) picks the first unblocked `[ ]` task
+   of the active epic, executes it per its ceremony level, verifies `Hecho cuando`, marks
+   `[x]`, updates `roadmap.yaml`, and closes with `mem_session_summary`.
+3. The runner stops on any of:
+   - Backlog empty (`NEXT-TASK: empty` reported by the skill).
+   - Kill-switch file `.loop-stop` present in the target repo root.
+   - **2 consecutive iterations with no `[x]` change** in `roadmap.yaml`/epic files — checked
+     by hashing those files between iterations, not by trusting agent self-report.
+
+### Budget — governed by context, not iteration count
+
+- **One task per iteration, always.** On task close: checkpoint (`mem_session_summary` +
+  epic state on disk) and restart with clean context, even if the context window still had
+  headroom.
+- **Checkpoint at ~50% of the context window (≈100k tokens)** if the task hasn't closed: a
+  structured intermediate summary (done / missing / concrete next step); the next iteration
+  resumes from there.
+- **`--max-turns 40`** is the runner-side proxy for this budget.
+- **Anti-insistence**: if the same task survives 3 iterations without closing, it wasn't
+  atomic — the loop returns it to replanning (`atomic-session-planning`) instead of grinding
+  on it further.
+
+### L4 semantics in loop mode — never unattended
+
+`config/routing-rules.yaml → loop_mode` is the source of truth. Summary: an L4 task
+(`l4_keywords` — money, auth, identity, compliance) is implemented up to the gate
+(build/test green), the escalation is written to `management/escalations/YYYY-MM-DD_<slug>.md`
++ Engram, and **the iteration does not commit without explicit owner sign-off**. This is
+"escalate and continue" — the loop does not halt the whole run, it just moves to the next
+unblocked task on the next iteration.
+
+### Permissions — required before running
+
+The loop runs `claude -p` unattended with `--dangerously-skip-permissions` (owner override,
+2026-07-02 — supersedes the original "never scoped over `$HOME`" mitigation from PROP-008: the
+owner runs it unrestricted rather than have the loop stall on permission prompts). Risk is
+explicitly assumed by the owner, not auto-decided by the loop.
+
+- The kill-switch (`touch .loop-stop` in the target repo root) is the manual emergency stop —
+  check it works before leaving a loop unattended for long stretches. It's the primary safety
+  net now that the permission gate is off.
+- L4 tasks still never commit unattended (see `loop_mode` above) — that guardrail is
+  independent of the permissions flag and stays in force.
+
+### Usage
+
+```bash
+cd /path/to/target-repo   # must have management/<scope>/roadmap.yaml
+/path/to/team-ai-harness/scripts/loop-runner.sh --dry-run   # validates driver, no execution
+/path/to/team-ai-harness/scripts/loop-runner.sh              # runs until stop condition
+touch .loop-stop                                              # emergency stop
+```
+
+---
+
 ## Prerequisites
 
 | Tool | Version | Install |

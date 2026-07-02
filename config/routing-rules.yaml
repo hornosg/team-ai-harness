@@ -191,10 +191,10 @@ provider_routing:
   # Provider por agente (default — puede ser sobreescrito por ceremony_overrides)
   agent_providers:
     # Orquestadores → Ollama Cloud (ruteo determinístico, bajo costo)
-    meta-router: ollama/llama3.1
-    dev-orchestrator: ollama/llama3.1
-    product-orchestrator: ollama/llama3.1
-    marketing-orchestrator: ollama/llama3.1
+    meta-router: claude/claude-haiku-4-5-20251001
+    dev-orchestrator: claude/claude-haiku-4-5-20251001
+    product-orchestrator: claude/claude-haiku-4-5-20251001
+    marketing-orchestrator: claude/claude-haiku-4-5-20251001
 
     # Dev L4 — Claude Opus (inamovible)
     dev-architect: claude/claude-opus-4-8
@@ -277,3 +277,35 @@ urgency_overrides:
     skip_to: dev-orchestrator
     level: L4
     notify: [dev-architect, dev-security, dev-devops]
+
+# ─── Loop mode — driver de iteraciones sin owner en el medio ─────────────────
+# Aplica cuando el meta-router opera vía `next-task` (skills/shared/loop-next-task)
+# invocado desde scripts/loop-runner.sh. Origen: PROP-008 / E33.
+loop_mode:
+  # Regla no negociable: L4 NUNCA corre desatendido en loop.
+  l4_unattended: forbidden
+  # Semántica del freno L4 en loop = "escalar y continuar" (no frena la corrida completa):
+  l4_in_loop_policy:
+    - "La iteración que detecta l4_keywords implementa hasta el gate (build/test verdes)."
+    - "Escribe la escalación en management/escalations/YYYY-MM-DD_<slug-tarea>.md + Engram (mem_save)."
+    - "NO commitea sin sign-off explícito del owner, sin excepción."
+    - "El loop continúa con la próxima tarea sin dependencias pendientes en la iteración siguiente."
+  # Presupuesto gobernado por contexto, no por número fijo de iteraciones:
+  budget:
+    unit: contexto             # no "iteraciones" — una tarea por iteración siempre
+    checkpoint_at: "~50% ventana (≈100k tokens)"
+    checkpoint_action: "resumen estructurado hecho/falta/próximo paso; próxima iteración retoma"
+    max_turns_proxy: 40        # proxy en scripts/loop-runner.sh (--max-turns)
+    stall_threshold: 3         # iteraciones consecutivas sin cerrar la MISMA tarea
+    stall_action: "devolver a replanificación (skills/dev/atomic-session-planning), no seguir iterando"
+    no_progress_threshold: 2   # iteraciones consecutivas sin marcar ningún [x] en roadmap/épica
+    no_progress_action: "loop-runner.sh se detiene solo"
+  # Kill-switch manual, chequeado por el runner antes de cada iteración:
+  kill_switch_file: .loop-stop
+  # Permisos: override del owner (2026-07-02, ver E33 §Notas) — corre con
+  # --dangerously-skip-permissions sin restricción de path. Supersede la mitigación
+  # original de PROP-008 ("nunca sobre $HOME"): el owner usa este flag siempre y
+  # prefiere el riesgo a que el loop se frene por prompts de permiso.
+  permissions_policy: "--dangerously-skip-permissions sin restricción — decisión explícita del owner, riesgo asumido"
+  # Workload de referencia (PROP-008): apto para retrofits mecánicos con patrón ya
+  # diseñado (E24-E30). Explícitamente NO aplica a trabajo de aprendizaje del owner (E12-E18).

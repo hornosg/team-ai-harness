@@ -37,7 +37,32 @@ done
 TARGET="${TARGET:-$(pwd)}"
 TARGET="$(cd "$TARGET" && pwd)"
 
-MGMT_DIR="$TARGET/management"
+# ─── Anti-doble-anidación ──────────────────────────────────────────────────────
+# Si TARGET YA ES el directorio management/ del harness (tiene agents/ + skills/ +
+# config/ con la forma esperada), no anidar management/management/. Esto pasa
+# cuando alguien corre el installer pasando la ruta al management/ existente en
+# vez de la raíz del proyecto que lo contiene.
+if [[ "$(basename "$TARGET")" == "management" && -d "$TARGET/agents" && -d "$TARGET/skills" ]]; then
+  MGMT_DIR="$TARGET"
+  PROJECT_ROOT="$(dirname "$TARGET")"
+else
+  MGMT_DIR="$TARGET/management"
+  PROJECT_ROOT="$TARGET"
+fi
+TARGET="$PROJECT_ROOT"
+
+# ─── Guardia: no sobrescribir un management/ con cambios sin commitear ────────
+# Si MGMT_DIR está dentro de un repo git y tiene cambios sin commitear (o el repo
+# padre los tiene sobre paths dentro de MGMT_DIR), --upgrade puede pisar contenido
+# que nunca se guardó en un commit. Git checkout NO lo puede recuperar después.
+if [[ "$UPGRADE" == true && -d "$MGMT_DIR" ]] && command -v git &>/dev/null; then
+  if git -C "$MGMT_DIR" rev-parse --is-inside-work-tree &>/dev/null; then
+    DIRTY="$(git -C "$MGMT_DIR" status --porcelain -- agents skills config rules CLAUDE.md PROJECT.md platform roadmap 2>/dev/null)"
+    if [[ -n "$DIRTY" ]]; then
+      fail "MGMT_DIR ($MGMT_DIR) tiene cambios sin commitear en rutas que --upgrade va a sobrescribir. Commiteá o stasheá primero (git -C '$MGMT_DIR' status), después reintentá."
+    fi
+  fi
+fi
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 step()  { echo -e "\n${BLUE}▸ $*${NC}"; }

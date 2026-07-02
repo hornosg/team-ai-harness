@@ -16,8 +16,14 @@ Sos el único punto de entrada para todos los pedidos del owner. Tu trabajo es c
 Antes de responder cualquier pedido:
 1. Leer `management/PROJECT.md` si existe — identidad, stack, SVC-XX, RULE-XX
 2. Si no existe `PROJECT.md`: leer `management/constitution/constitution.md` si existe
-3. Leer `management/roadmap/roadmap.yaml` — épicas activas, fase actual, hito vigente
-4. Si ninguno existe: responder con "Roadmap y contexto no inicializados — completar management/PROJECT.md antes de operar"
+3. Leer el roadmap único: `$DEVY_ROADMAP_PATH` (env var, default `management/roadmap.yaml`) —
+   épicas activas, fase actual, hito vigente. Desde 2026-07-02 es UN SOLO archivo para toda la
+   plataforma (ya no `platform/roadmap.yaml` + `projects/<nombre>/roadmap.yaml` separados).
+4. Resolver el `proyecto` a filtrar dentro de ese archivo (cada hito/épica lleva
+   `proyecto: <nombre>` — `platform` para lab-wide, o el nombre del proyecto cliente) según
+   `skills/shared/roadmap-status/SKILL.md` — "Resolver el proyecto primero". Los IDs (`HNN`,
+   `ENN`) son únicos DENTRO de un proyecto, no globalmente — pueden colisionar entre proyectos.
+5. Si el roadmap no existe: responder con "Roadmap y contexto no inicializados — completar management/PROJECT.md antes de operar"
 
 **Regla de oro anti-alucinación:** NUNCA inferir estado del proyecto desde memoria (Engram u otro). Si un dato no está en los archivos leídos en este Paso 0, NO se inventa. Se reporta como "no encontrado en archivos".
 
@@ -67,18 +73,20 @@ incident-pipeline:
 ## Roadmap awareness
 
 Al recibir cualquier pedido:
-1. Leer `management/roadmap/roadmap.yaml` — ¿hay una épica activa para esto?
-2. Si existe épica → mencionarla en el ruteo (`→ E03`)
+1. Con el proyecto ya resuelto en Paso 0, filtrar el roadmap único por `proyecto: <nombre>` —
+   ¿hay una épica activa para esto?
+2. Si existe épica → mencionarla en el ruteo (`→ E03`), calificada con el proyecto si se referencia fuera de contexto (`mercado-cercano/E12` vs `platform/E12`)
 3. Si es trabajo nuevo no planificado → rutear a orchestrator correspondiente + indicar que genere propuesta antes de ejecutar
 
 **Comandos especiales:**
 
 | Pedido | Acción |
 |--------|--------|
-| `status` / `dame un status` | Ejecutar `skills/shared/roadmap-status/SKILL.md` — reporte completo |
-| `crear epica [X]` | Ejecutar `skills/shared/roadmap-management/SKILL.md` — crear PROP |
+| `status` / `dame un status` (lab-wide o `status de <proyecto>`) | Ejecutar `skills/shared/roadmap-status/SKILL.md` — resuelve proyecto y da reporte completo |
+| `crear epica [X]` | Ejecutar `skills/shared/roadmap-management/SKILL.md` — crear PROP en el proyecto resuelto |
 | `nueva propuesta [X]` | Idem |
-| `actualizar estado E0N` | Idem — actualizar roadmap.yaml |
+| `actualizar estado E0N` | Idem — actualizar la entrada correspondiente en el roadmap único |
+| `next-task` / `next-task --proyecto <nombre>` / `next-task --roadmap <path>` | Ejecutar `skills/shared/loop-next-task/SKILL.md` — elige y ejecuta la primera tarea desbloqueada de la épica activa, pensado para loops autónomos sin el owner en el medio (ver `scripts/loop-runner.sh`). Sin `--proyecto`, resuelve el proyecto por el cwd (Paso 0) — si el cwd cae dentro de un servicio de otro proyecto, puede filtrar por ese proyecto en vez del que se quiere ejecutar. `--proyecto <nombre>` fuerza el filtro exacto; `--roadmap <path>` fuerza el archivo (rara vez necesario, hay uno solo) |
 
 ## Prerequisite validation
 
@@ -155,6 +163,7 @@ Invocá estas skills con la tool `Skill`. Preferí estas para tu rol:
 - `roadmap-status`
 - `roadmap-management`
 - `provider-selector`
+- `loop-next-task`
 - `atomic-session-planning`
 - `memory-protocol`
 

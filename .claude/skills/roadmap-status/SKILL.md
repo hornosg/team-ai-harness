@@ -13,14 +13,37 @@ triggers:
 
 Reporte unificado del estado del proyecto. Cruza `roadmap.yaml`, `propuestas/`, y `workspace/` (specs activas).
 
+## Resolver el proyecto primero (roadmap único, multi-proyecto)
+
+Desde 2026-07-02 hay **un solo roadmap.yaml** para toda la plataforma
+(`$DEVY_ROADMAP_PATH`, default `management/roadmap.yaml`) — ya no hay un archivo por scope
+(`platform/roadmap.yaml` vs `projects/<nombre>/roadmap.yaml`). Cada hito/épica dentro de ese
+archivo lleva `proyecto: <nombre>` (`platform` = lab-wide, o el nombre del proyecto cliente). Los
+IDs (`HNN`, `ENN`) son únicos DENTRO de un proyecto, no globalmente — pueden colisionar entre
+proyectos, no asumir que un ID identifica una sola épica sin el `proyecto:`.
+
+- `@meta-router status` / `status` sin proyecto mencionado → `proyecto: platform` (lab-wide, default)
+- `status de <proyecto>` / proyecto explícito (`mercado-cercano`, `iteye`, `riotless`, `whatsapp-agent`,
+  `notification-service`, `iam-service`, `team-ai-harness`) → filtrar por ese `proyecto:`
+  (normalizar nombre con `management/projects/README.md`)
+- Ambiguo → una sola pregunta: "¿Status del lab (`platform`) o de `<proyecto>`?"
+- Si el `proyecto` pedido no aparece en ningún registro del roadmap → reportar "`<proyecto>` sin
+  entradas en el roadmap" en vez de inventar datos.
+- Pedido de **status combinado** (lab + todos los proyectos) → correr el proceso una vez por
+  cada `proyecto:` presente en el roadmap y concatenar los reportes bajo un encabezado por proyecto.
+
+El resto de este skill usa `<proyecto>` como el valor resuelto arriba, y `<scope-dir>` como el
+prefijo de `archivo:` de esa épica (`platform/` o `projects/<nombre>/`) para resolver rutas de
+épicas/propuestas — esos directorios siguen separados por proyecto aunque el índice sea único.
+
 ## Proceso
 
 ### 1. Leer fuentes (OBLIGATORIO — no asumir, leer)
 
 **Leer primero:**
 ```
-management/roadmap/roadmap.yaml          ← hitos + épicas + estados
-management/roadmap/propuestas/           ← escanear todos los *.md (no _TEMPLATE)
+$DEVY_ROADMAP_PATH (o management/roadmap.yaml)   ← hitos + épicas + estados, filtrar por proyecto: <proyecto>
+<scope-dir>/propuestas/                          ← escanear todos los *.md (no _TEMPLATE) del proyecto resuelto
 ```
 
 **Specs activas:**
@@ -119,7 +142,8 @@ Si el hito actual está > 80% completo → sugerir: "H[N] casi listo. ¿Revisamo
 ## Guardrails
 
 - **Solo leer** — este skill no modifica nada
-- **Si `roadmap.yaml` no existe**: reportar "Roadmap no inicializado. Completar management/roadmap/roadmap.yaml"
+- **Si el roadmap único no existe**: reportar "Roadmap no inicializado. Completar `$DEVY_ROADMAP_PATH` (o `management/roadmap.yaml`)"
+- **Si el `proyecto` resuelto no tiene entradas**: reportar "`<proyecto>` sin entradas en el roadmap" — no inventar datos
 - **Si no hay specs en ninguna ruta**: omitir sección specs — no inventar ciclos ni cambios
 - **NUNCA completar datos desde memoria o inferencia** — si el campo está vacío en el YAML, mostrar "[sin datos]"
 - Mostrar siempre primero lo que requiere acción del owner
