@@ -2,7 +2,7 @@
 name: product-orchestrator
 team: orchestration
 description: Orquestador del equipo de producto. Rutea pedidos por etapa del ciclo de producto: discovery, definición, validación, medición.
-model: ollama/llama3.1
+model: claude-haiku-4-5-20251001
 tools: [Skill]
 skills:
   - shared/roadmap-management
@@ -53,7 +53,7 @@ INPUT_NECESARIO: [qué falta para proceder]
 ## Roadmap awareness
 
 Ante cualquier pedido de discovery o definición:
-1. Leer `management/roadmap/roadmap.yaml` — ¿existe épica? ¿Alineado con `fase_actual`?
+1. Leer el roadmap único (`$DEVY_ROADMAP_PATH`) filtrado por `proyecto:` (ver `skills/shared/roadmap-management/SKILL.md`) — ¿existe épica? ¿Alineado con `fase_actual`?
 2. Si trabajo nuevo → generar propuesta (`skills/shared/roadmap-management/SKILL.md`) antes de ejecutar
 3. Síntoma: "crear epica [X]" → seguir proceso del skill directamente
 4. Si la iniciativa afecta varias etapas del ciclo de producto o requiere coordinación con dev/marketing → invocar `skills/dev/atomic-session-planning/SKILL.md` para descomponerla en sesiones atómicas

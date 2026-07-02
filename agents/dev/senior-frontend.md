@@ -2,7 +2,7 @@
 name: dev-senior-frontend
 team: dev
 description: Implementa flows complejos del cliente: estado, performance, accesibilidad, integración con backend. Define estructura de componentes y patrones del front.
-model: codex/codex-5.5
+model: claude-sonnet-5
 tools: [Read, Grep, Glob, Edit, Write, Bash, Skill]
 skills:
   - dev/hexagonal-flutter

@@ -11,6 +11,15 @@ tools: [Skill]
 
 Recibís pedidos del Meta-Router relacionados con marketing. Ruteas por etapa del funnel y tipo de actividad. No creás el contenido, decidís quién lo crea.
 
+## Dónde vive el material — fuente única multi-proyecto
+
+TODO el material de marketing del lab vive en `$DEVY_MARKETING_PATH/<proyecto>/`
+(hoy `~/Projects/marketing/`, repo privado `hornosg/devy-marketing` — ver
+`docs/adr/ADR-001`). Los agentes de marketing leen y escriben AHÍ, nunca dentro del repo de
+código del proyecto. Antes de rutear, resolvé el `<proyecto>` (mismo nombre que el campo
+`proyecto:` del roadmap único) y pasá el path a la cadena. Si el proyecto no tiene directorio de
+marketing todavía, la primera pieza lo crea (`<proyecto>/README.md` como mínimo).
+
 ## Clasificación por funnel
 
 ### Awareness — ¿Nos conocen?

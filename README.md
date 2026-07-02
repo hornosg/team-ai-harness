@@ -1,6 +1,6 @@
 # Team AI Harness
 
-> A multi-team AI agent harness for development, product, and marketing — built for Claude Code, OpenCode, Cursor, and GitHub Copilot.
+> A multi-team AI agent harness for development, product, and marketing — built for Claude Code (OpenCode/Cursor/Copilot adapters available, deactivated by default).
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-compatible-blue)](https://claude.ai/code)
@@ -10,13 +10,13 @@
 
 ## What is this?
 
-A ready-to-use harness of **32 specialized AI agents** organized across three teams (Dev, Product, Marketing) with a central routing layer. You install it once into any project's `management/` folder and get:
+A ready-to-use harness of **32 specialized AI agents** organized across three teams (Dev, Product, Marketing) with a central routing layer. You install it ONCE at the root of your multi-project lab (`$DEVY_PATH` — see ADR-001) and get:
 
 - A single entry point (`@meta-router`) that classifies every request and routes it to the right agent chain
 - Ceremony levels (L1–L4) that enforce appropriate rigor based on risk — L4 for anything touching money, auth, or compliance is non-negotiable
 - Spec-driven development with FILE-ID / TEST-ID traceability from plan to code to test
 - Persistent memory across sessions via [Engram](https://github.com/Gentleman-Programming/engram)
-- Multi-adapter sync: same canonical agents generate Claude Code, OpenCode, Cursor, and Copilot formats
+- Adapter sync: canonical agents generate Claude Code format (`.claude/agents/`); OpenCode/Cursor/Copilot adapters exist in the sync script but are deactivated by default (ADR-001)
 
 ---
 
@@ -50,24 +50,24 @@ Owner
 - **Ceremony levels** — L1 (quick fix) to L4 (money/auth/compliance). Each level defines which agents are required, what planning is mandatory, and what can't be skipped.
 - **FILE-ID / TEST-ID system** — every planned file gets a traceable ID. Every test maps to a FILE-ID. The code reviewer verifies this mechanically before merge.
 - **Cross-domain pipelines** — launch a feature, run a growth initiative, or manage an incident across Product → Dev → Marketing with a single `@meta-router` command.
-- **Roadmap integration** — agents read `roadmap/roadmap.yaml` to contextualize requests. `@meta-router status` crosses roadmap + proposals + OpenSpec specs into one report.
-- **Multi-adapter sync** — one canonical source in `agents/` generates outputs for Claude Code (`.claude/agents/`), OpenCode (`.opencode/agents/`), Cursor (`.cursor/rules/`), and Copilot (`.github/agents/`).
+- **Roadmap integration** — agents read the single multi-project `management/roadmap.yaml` (`$DEVY_ROADMAP_PATH`) to contextualize requests. `@meta-router status` crosses roadmap + proposals + specs into one report.
+- **Adapter sync** — one canonical source in `agents/` generates Claude Code output (`.claude/agents/`). OpenCode/Cursor/Copilot adapters remain in the sync script, deactivated by default (ADR-001).
 - **Persistent memory** — all senior agents use [Engram](https://github.com/Gentleman-Programming/engram) to persist architectural decisions, bug resolutions, and session context across conversations. The installer wires Engram MCP into `.claude/settings.local.json` automatically.
 - **Atomic session planning** — multi-step or cross-service work is broken into single-session, verifiable tasks with explicit dependencies and Engram handoffs (`skills/dev/atomic-session-planning/SKILL.md`).
-- **Open model support** — runs on Anthropic Claude, Ollama Hermes, or Kimi K2 without code changes. Artifact granularity auto-adjusts via `Detalle de ejecución`.
+- **Emergency fallback** — when Anthropic tokens run out, relaunch on Kimi K2 (Ollama Cloud) without code changes. Artifact granularity auto-adjusts via `Detalle de ejecución`.
 
 ---
 
-## Open Model Compatibility (Hermes / Kimi / Ollama Cloud)
+## Model policy + emergency fallback (kimi)
 
-The harness runs on **Anthropic Claude**, **Ollama Hermes**, or **Kimi K2** without any code change. Provider selection is configured in `config/routing-rules.yaml`.
+Default policy (ADR-001): **Anthropic-first** — haiku for routing, sonnet for implementation, opus for critical/L3-L4 (`config/routing-rules.yaml → agent_providers`). When Anthropic tokens run out, the owner relaunches the session with `claude --dangerously-skip-permissions --model kimi-k2.7-code:cloud`; the backing becomes global (kimi) and artifact detail rises to `reforzado`.
 
 ### Capability tiers
 
 | Tier | Models | Artifact detail |
 |------|--------|-----------------|
-| `frontier` | `claude-opus-4-8`, `codex-5.5` | `estándar` — model fills in reasonable context |
-| `open_mid` | `kimi-k2.7-code:cloud`, `hermes3:cloud`, `qwen2.5-coder`, `llama3.1` | `reforzado` — tasks must be atomic and self-contained |
+| `frontier` | `claude-opus-4-8`, `claude-sonnet-5`, `claude-haiku-4-5-20251001` | `estándar` — model fills in reasonable context |
+| `open_mid` | `kimi-k2.7-code:cloud` (manual emergency fallback) | `reforzado` — tasks must be atomic and self-contained |
 
 **Rule**: the lower the model capacity, the higher the artifact explicitness. `reforzado` means every epic task must include an `Objetivo:` (exact path), a `Hecho cuando:` (observable result), and optionally a `Contrato:` (exact signature, required in L3/L4).
 
@@ -75,8 +75,8 @@ The harness runs on **Anthropic Claude**, **Ollama Hermes**, or **Kimi K2** with
 
 Epics and proposals carry a `Detalle de ejecución: estándar | reforzado` field. This is orthogonal to ceremony level:
 
-- **`estándar`** — frontier models (Claude Opus, Codex). Natural language tasks are fine; the model fills context gaps.
-- **`reforzado`** — open models (Hermes, Kimi, Ollama Cloud). Every task is atomic:
+- **`estándar`** — frontier models (Claude opus/sonnet/haiku). Natural language tasks are fine; the model fills context gaps.
+- **`reforzado`** — open-model fallback (kimi). Every task is atomic:
 
 ```markdown
 - [ ] **T1 · [verb + concrete object]**
@@ -86,25 +86,15 @@ Epics and proposals carry a `Detalle de ejecución: estándar | reforzado` field
       Contrato: `func Name(ctx context.Context, id string) (Entity, error)`  ← L3/L4 only
 ```
 
-### Runtime behavior under Claude Code vs OpenCode
+### Runtime behavior
 
-| Runtime | Per-agent model routing | Consequence |
-|---------|------------------------|-------------|
-| **OpenCode** | ✅ yes — each agent uses its declared `model:` | Provider matrix in `routing-rules.yaml` is fully respected |
-| **Claude Code** | ❌ no — all subagents share a single global backing model (`ANTHROPIC_BASE_URL`) | Quality depends on artifact self-sufficiency, not routing. Use `reforzado` when backing is open_mid. |
+Under Claude Code with the native Anthropic backend, each agent's frontmatter `model:` is
+respected — the haiku/sonnet/opus matrix applies per agent. Under the kimi fallback
+(`claude --model kimi-k2.7-code:cloud`) the backing model is GLOBAL: every agent runs kimi,
+per-agent routing is ignored, and quality depends on artifact self-sufficiency (`reforzado`).
 
-**L4 on open_mid backing**: architect and security agents require frontier reasoning. If the only available backing is open_mid, L4 does NOT auto-execute — it is flagged and escalated to the owner.
-
-### Adding Ollama / Kimi as backing in Claude Code
-
-Point `ANTHROPIC_BASE_URL` to your Ollama Cloud gateway before launching:
-
-```bash
-export ANTHROPIC_BASE_URL=https://your-ollama-cloud-gateway/v1
-claude
-```
-
-Ollama Cloud model names use the `:cloud` tag (e.g. `hermes3:cloud`, `kimi-k2.7-code:cloud`). See `config/routing-rules.yaml → providers.ollama.models`.
+**L4 on the kimi fallback**: architect and security require frontier reasoning — L4 does NOT
+auto-execute; it is flagged and escalated to the owner.
 
 ---
 
@@ -223,34 +213,36 @@ engram setup opencode
 
 ## Quick Start
 
-### Option A — Install into an existing project
+> **Installation model (ADR-001, 2026-07-02): ONE install per lab, not per repo.**
+> The harness is installed a single time at the root of your multi-project lab (`$DEVY_PATH` —
+> the directory that contains all your project repos). Code repos stay clean: no `management/`,
+> no generated `.claude/agents/` inside them. All work sessions launch from `$DEVY_PATH`;
+> `@meta-router` resolves the target project and loads its context via pointers
+> (`management/projects/<name>/PROJECT.md` → code location). See
+> [`docs/adr/ADR-001-instalacion-unica-lab-level.md`](docs/adr/ADR-001-instalacion-unica-lab-level.md).
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/<your-org>/team-ai-harness/main/scripts/install-management.sh | bash
-```
-
-Or clone and run locally:
-
-```bash
-git clone https://github.com/<your-org>/team-ai-harness
-cd team-ai-harness
-./scripts/install-management.sh /path/to/your-project
-```
-
-This creates a `management/` folder inside your project with all agents, skills, rules, roadmap templates, and a root `CLAUDE.md` that points to `management/CLAUDE.md`.
-
-### Option B — Use this repo directly
+### Install at the lab root
 
 ```bash
 git clone https://github.com/<your-org>/team-ai-harness
 cd team-ai-harness
-./scripts/sync-agents.sh   # generates .claude/agents/ and .opencode/agents/
+./scripts/install-management.sh /path/to/your-lab-root   # e.g. ~/Projects
 ```
 
-Then open Claude Code or OpenCode in the repo root:
+This creates a `management/` folder at the lab root with all agents, skills, rules, the single
+multi-project roadmap template, and a root `CLAUDE.md` that points to `management/CLAUDE.md`.
+Then define the environment contract in your shell profile:
 
 ```bash
-claude
+export DEVY_PATH="$HOME/Projects"                                   # lab root
+export DEVY_ROADMAP_PATH="$DEVY_PATH/management/roadmap.yaml"       # single roadmap
+export DEVY_MARKETING_PATH="$DEVY_PATH/marketing"                   # single marketing repo
+```
+
+Then open Claude Code at the lab root:
+
+```bash
+cd $DEVY_PATH && claude
 ```
 
 ```
@@ -262,7 +254,7 @@ claude
 ## First Steps After Install
 
 1. **Fill in `management/PROJECT.md`** — project identity, stack, services, principles. Agents read this as ground truth.
-2. **Complete `management/roadmap/roadmap.yaml`** — milestones and epics. Ask `@meta-router crear epica [X]` if you're starting fresh.
+2. **Complete `management/roadmap.yaml`** — the single multi-project roadmap (every milestone/epic carries a `proyecto:` field; see docs/adr/ADR-001). Ask `@meta-router crear epica [X]` if you're starting fresh.
 3. **Check the status** — `@meta-router status` gives a full report crossing roadmap + proposals + specs.
 
 ---

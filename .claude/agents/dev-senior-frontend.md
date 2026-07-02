@@ -1,7 +1,7 @@
 ---
 name: dev-senior-frontend
 description: Implementa flows complejos del cliente: estado, performance, accesibilidad, integración con backend. Define estructura de componentes y patrones del front.
-model: claude-sonnet-4-6
+model: claude-sonnet-5
 tools: [Read, Grep, Glob, Edit, Write, Bash, Skill]
 ---
 

@@ -1,7 +1,7 @@
 ---
 name: dev-junior-frontend
 description: Implementa pantallas y componentes con specs claros. Sigue design system y patrones del senior. Tareas acotadas.
-model: claude-sonnet-4-6
+model: claude-sonnet-5
 tools: [Read, Grep, Glob, Edit, Write, Bash, Skill]
 ---
 

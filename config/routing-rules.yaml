@@ -124,73 +124,50 @@ provider_routing:
   # L4 siempre usa Claude — nunca negociable
   l4_provider_lock: claude
 
+  # Política de modelos (ADR-001, 2026-07-02): Anthropic-first en tres tiers —
+  # haiku (ruteo/bajo riesgo), sonnet (implementación), opus (crítico/L3-L4).
+  # Codex (OpenAI) fue retirado de la matriz. Ollama queda SOLO como fallback manual.
   providers:
     claude:
-      description: Razonamiento profundo, compliance, decisiones irreversibles, L3/L4
+      description: Único provider activo. haiku = ruteo/clasificación/bajo riesgo;
+        sonnet = implementación de código; opus = razonamiento profundo, compliance,
+        decisiones irreversibles, L3/L4.
       api: anthropic
       models:
         high: claude-opus-4-8
-        medium: claude-opus-4-8
+        medium: claude-sonnet-5
         low: claude-haiku-4-5-20251001
 
-    codex:
-      description: Generación de código, refactor, implementación L1/L2
-      api: openai
-      models:
-        default: codex-5.5
-
     ollama:
-      description: Modelos abiertos vía Ollama Cloud — clasificación, ruteo, borradores e
-        implementación de bajo/medio riesgo cuando el owner corre el harness sin Anthropic.
+      description: FALLBACK MANUAL DE EMERGENCIA — no participa del ruteo normal.
+        Cuando el owner agota tokens Anthropic, relanza la sesión con
+        `claude --dangerously-skip-permissions --model kimi-k2.7-code:cloud`.
+        El backing pasa a ser GLOBAL (todos los agentes corren kimi) y el detalle de
+        ejecución de los artefactos sube a `reforzado` (ver capability_tiers).
       api: ollama_cloud
-      # Nomenclatura Ollama Cloud: los modelos hosteados llevan tag `:cloud`.
       models:
-        general: llama3.1
-        code: qwen2.5-coder
-        # Hermes (NousResearch) — tuneado para function-calling y structured output.
-        # Mejor que llama3.1 para roles de tool-dispatch (router + orquestadores) y agentes.
-        hermes: hermes3:cloud
-        # Kimi K2 (Moonshot) — MoE fuerte en coding y uso agéntico de tools. Backing actual del owner.
         kimi: kimi-k2.7-code:cloud
-      # Modelo de backing por defecto cuando se corre el harness sobre Ollama Cloud.
       default: kimi-k2.7-code:cloud
 
-  # ─── Cómo se resuelve el modelo según el runtime ───────────────────────────
-  # IMPORTANTE: esta matriz por-agente es un CONTRATO DECLARATIVO de intención.
-  # Cuánto se respeta depende del runtime que ejecute el harness:
-  model_resolution:
-    opencode:
-      # OpenCode configura modelo POR AGENTE → la matriz agent_providers se aplica tal cual.
-      respects_per_agent: true
-    claude_code:
-      # Claude Code resuelve el `model:` del frontmatter de cada subagente contra los modelos
-      # que el runtime tiene disponibles. Para usar Ollama Cloud se apunta el runtime a un
-      # endpoint OpenAI-compatible (ANTHROPIC_BASE_URL → gateway/Ollama Cloud), con lo cual
-      # TODOS los subagentes comparten el MISMO modelo de backing global (hoy: kimi-k2.7-code:cloud).
-      respects_per_agent: false
-      backing_model_is_global: true
-      # Consecuencia: bajo Claude Code la calidad NO la da el ruteo por-agente sino la
-      # AUTOSUFICIENCIA de los artefactos. Por eso épicas/tareas se especifican en `reforzado`
-      # (ver roadmap-management → estándar de granularidad) cuando el backing es abierto.
-
   # ─── Portabilidad por capacidad del modelo ─────────────────────────────────
-  # El harness debe correr con Anthropic Claude, Ollama Hermes y Ollama Kimi indistintamente.
+  # Vigente para el escenario de fallback kimi: a menor capacidad del backing,
+  # mayor explicitud del artefacto.
   capability_tiers:
     frontier:
-      models: [claude-opus-4-8, codex-5.5]
+      models: [claude-opus-4-8, claude-sonnet-5, claude-haiku-4-5-20251001]
       detalle_ejecucion: estándar   # el modelo rellena contexto razonable
     open_mid:
-      models: [kimi-k2.7-code:cloud, hermes3:cloud, qwen2.5-coder, llama3.1]
+      models: [kimi-k2.7-code:cloud]
       detalle_ejecucion: reforzado  # tareas atómicas con path + "Hecho cuando" + Contrato
       # Regla: con backing open_mid, los artefactos se elevan a `reforzado` aunque el ceremony
-      # level sea L1/L2. A menor capacidad del modelo, mayor explicitud del artefacto.
+      # level sea L1/L2.
     note: >
       L4 sigue exigiendo razonamiento frontier para architect+security. Si el único backing
-      disponible es open_mid, L4 NO se auto-aprueba: se marca y se escala al owner.
+      disponible es open_mid (fallback kimi), L4 NO se auto-aprueba: se marca y se escala al owner.
 
   # Provider por agente (default — puede ser sobreescrito por ceremony_overrides)
   agent_providers:
-    # Orquestadores → Ollama Cloud (ruteo determinístico, bajo costo)
+    # Orquestadores → haiku (ruteo determinístico, bajo costo)
     meta-router: claude/claude-haiku-4-5-20251001
     dev-orchestrator: claude/claude-haiku-4-5-20251001
     product-orchestrator: claude/claude-haiku-4-5-20251001
@@ -200,36 +177,36 @@ provider_routing:
     dev-architect: claude/claude-opus-4-8
     dev-security: claude/claude-opus-4-8
 
-    # Dev — implementación pura → Codex; juicio/review → Claude
+    # Dev — implementación → sonnet; juicio/review → opus
     dev-technical-leader: claude/claude-opus-4-8    # review + mentoring requiere razonamiento
-    dev-senior-backend: codex/codex-5.5
-    dev-senior-frontend: codex/codex-5.5
-    dev-junior-backend: codex/codex-5.5
-    dev-junior-frontend: codex/codex-5.5
+    dev-senior-backend: claude/claude-sonnet-5
+    dev-senior-frontend: claude/claude-sonnet-5
+    dev-junior-backend: claude/claude-sonnet-5
+    dev-junior-frontend: claude/claude-sonnet-5
     dev-devops: claude/claude-opus-4-8              # infra/CI requiere juicio contextual
     dev-qa: claude/claude-opus-4-8                  # diseño de tests requiere razonamiento
     dev-monitoreo: claude/claude-opus-4-8           # análisis de SLOs y alertas
     dev-project-leader: claude/claude-opus-4-8      # roadmap y priorización
 
-    # Product — estrategia y discovery → Claude Opus
+    # Product — estrategia y discovery → opus; bajo riesgo → haiku
     product-leader: claude/claude-opus-4-8
     product-strategist: claude/claude-opus-4-8
     product-owner: claude/claude-opus-4-8
     product-ux-researcher: claude/claude-opus-4-8
     product-senior-designer: claude/claude-opus-4-8
-    product-junior-designer: ollama/llama3.1
+    product-junior-designer: claude/claude-haiku-4-5-20251001
     product-analyst: claude/claude-opus-4-8
 
-    # Marketing — estrategia y copy → Claude Opus; bajo riesgo → Ollama
+    # Marketing — estrategia y copy → opus; bajo riesgo → haiku
     marketing-leader: claude/claude-opus-4-8
     marketing-brand-strategist: claude/claude-opus-4-8
     marketing-content-strategist: claude/claude-opus-4-8
     marketing-senior-copywriter: claude/claude-opus-4-8
-    marketing-junior-copywriter: ollama/llama3.1
+    marketing-junior-copywriter: claude/claude-haiku-4-5-20251001
     marketing-senior-creative: claude/claude-opus-4-8
-    marketing-junior-designer: ollama/llama3.1
+    marketing-junior-designer: claude/claude-haiku-4-5-20251001
     marketing-growth-marketer: claude/claude-opus-4-8
-    marketing-community-manager: ollama/llama3.1
+    marketing-community-manager: claude/claude-haiku-4-5-20251001
     marketing-analyst: claude/claude-opus-4-8
 
   # Overrides por ceremony level (tienen mayor precedencia que agent_providers)
@@ -251,15 +228,16 @@ provider_routing:
   # Routing por tipo de tarea (menor precedencia — se aplica cuando el nivel no es L3/L4)
   task_type_routing:
     code_generation:
-      preferred_provider: codex
+      preferred_provider: claude
+      model: claude-sonnet-5
       applies_to: [dev-senior-backend, dev-senior-frontend, dev-junior-backend, dev-junior-frontend]
     architecture:
       preferred_provider: claude
       model: claude-opus-4-8
       applies_to: [dev-architect, dev-technical-leader]
     classification:
-      preferred_provider: ollama
-      model: llama3.1
+      preferred_provider: claude
+      model: claude-haiku-4-5-20251001
       applies_to: [meta-router, dev-orchestrator, product-orchestrator, marketing-orchestrator]
     security_review:
       preferred_provider: claude

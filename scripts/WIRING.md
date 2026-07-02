@@ -47,7 +47,7 @@ Por cada agente, al generar el adapter de Claude Code:
    le dice al agente cuáles preferir, aunque nativamente vería todas).
 
 ```bash
-./scripts/sync-agents.sh            # genera .claude/agents + .claude/skills + .opencode
+./scripts/sync-agents.sh            # genera .claude/agents + .claude/skills (OpenCode desactivado, ADR-001)
 ```
 
 ## Notas

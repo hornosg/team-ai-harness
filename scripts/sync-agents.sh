@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # sync-agents.sh
-# Genera archivos para Claude Code (.claude/agents/) y OpenCode (.opencode/agents/)
+# Genera archivos para Claude Code (.claude/agents/). OpenCode desactivado (ADR-001, 2026-07-02).
 # a partir de los archivos canónicos en agents/
 # Soporta múltiples providers: claude (Anthropic), codex (OpenAI), ollama (Ollama Cloud)
 #
@@ -10,7 +10,7 @@
 #   ollama/<model-id>     → Ollama Cloud
 #
 # Fallbacks Claude Code (solo soporta Anthropic):
-#   codex/* → claude-sonnet-4-6        (tareas de código)
+#   codex/* → claude-sonnet-5        (tareas de código)
 #   ollama/* → claude-haiku-4-5-20251001 (ruteo/clasificación)
 #
 # Uso: ./scripts/sync-agents.sh [--dry-run]
@@ -140,9 +140,9 @@ claude_code_model() {
   local provider="$1" model_id="$2"
   case "$provider" in
     claude)        echo "$model_id" ;;
-    codex|openai)  echo "claude-sonnet-4-6" ;;
+    codex|openai)  echo "claude-sonnet-5" ;;
     ollama)        echo "claude-haiku-4-5-20251001" ;;
-    *)             echo "claude-sonnet-4-6" ;;
+    *)             echo "claude-sonnet-5" ;;
   esac
 }
 
@@ -166,7 +166,7 @@ validate_model() {
   case "$provider" in
     claude)
       case "$model_id" in
-        claude-opus-4-8|claude-sonnet-4-6|claude-haiku-4-5-20251001) return 0 ;;
+        claude-opus-4-8|claude-sonnet-5|claude-haiku-4-5-20251001) return 0 ;;
         *) echo -e "  ${YELLOW}⚠ Modelo claude no reconocido:${NC} '$model_id' en $agent_name" ;;
       esac ;;
     codex|openai)
@@ -239,19 +239,19 @@ ${body_with_skills}"
     echo -e "  ${GREEN}✓${NC} Claude Code → ${name}.md"
   fi
 
-  # ── OpenCode (.opencode/agents/) ─────────────────────────────────────────
-  local opencode_content
-  opencode_content="---
-mode: subagent
-description: ${description}
-model: ${oc_model}
----
-${body_with_skills}"
-
-  if [[ "$DRY_RUN" == false ]]; then
-    echo "$opencode_content" > "$OPENCODE_DIR/${name}.md"
-  fi
-  echo -e "  ${GREEN}✓${NC} OpenCode    → ${name}.md  (${oc_model})"
+  # ── OpenCode — DESACTIVADO (owner lo probó y lo descartó, ADR-001 2026-07-02) ──
+  # Para reactivar: descomentar este bloque y el mkdir de OPENCODE_DIR más abajo.
+  # local opencode_content
+  # opencode_content="---
+# mode: subagent
+# description: ${description}
+# model: ${oc_model}
+# ---
+# ${body_with_skills}"
+  # if [[ "$DRY_RUN" == false ]]; then
+  #   echo "$opencode_content" > "$OPENCODE_DIR/${name}.md"
+  # fi
+  # echo -e "  ${GREEN}✓${NC} OpenCode    → ${name}.md  (${oc_model})"
 
   case "$provider" in
     claude)        ((count_claude++)) || true ;;
@@ -263,7 +263,7 @@ ${body_with_skills}"
 }
 
 # Asegurar directorios de destino
-mkdir -p "$CLAUDE_DIR" "$OPENCODE_DIR" "$CLAUDE_SKILLS_DIR"
+mkdir -p "$CLAUDE_DIR" "$CLAUDE_SKILLS_DIR"   # OPENCODE_DIR desactivado (ADR-001)
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

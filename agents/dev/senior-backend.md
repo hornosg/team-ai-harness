@@ -2,7 +2,7 @@
 name: dev-senior-backend
 team: dev
 description: Implementa features complejas E2E: dominio, casos de uso, adaptadores, integraciones críticas. Toma decisiones tácticas, escribe tests significativos.
-model: codex/codex-5.5
+model: claude-sonnet-5
 tools: [Read, Grep, Glob, Edit, Write, Bash, Skill]
 skills:
   - dev/hexagonal-workflow

@@ -105,8 +105,7 @@ mkdir -p \
   "$MGMT_DIR/rules" \
   "$MGMT_DIR/config" \
   "$MGMT_DIR/scripts" \
-  "$TARGET/.claude/agents" \
-  "$TARGET/.opencode/agents"
+  "$TARGET/.claude/agents"
 ok "Directorios listos"
 
 # ─── 2. Copiar agentes canónicos ──────────────────────────────────────────────
@@ -153,7 +152,7 @@ cat > "$MGMT_DIR/scripts/sync-agents.sh" << 'SYNC_EOF'
 # Ejecutar desde cualquier lugar — resuelve paths relativos al script.
 #
 # Uso:
-#   ./sync-agents.sh              # adapters default (claude + opencode)
+#   ./sync-agents.sh              # adapters default (claude)
 #   ./sync-agents.sh --all        # todos los adapters
 #   ./sync-agents.sh --dry-run    # sin escribir archivos
 
@@ -167,8 +166,9 @@ SKILLS_SRC="$MGMT_DIR/skills"
 CLAUDE_SKILLS_DIR="$ROOT/.claude/skills"
 
 # ─── Adapters activos ────────────────────────────────────────────────────────
-# Descomentar los que se quieran activar:
-ADAPTERS=(claude opencode)
+# OpenCode desactivado por default (team-ai-harness/docs/adr/ADR-001, 2026-07-02).
+ADAPTERS=(claude)
+# ADAPTERS=(claude opencode)
 # ADAPTERS=(claude opencode cursor copilot)
 
 DRY_RUN=false
@@ -482,14 +482,14 @@ management/
 
 El sync-agents.sh genera formatos para múltiples herramientas:
 ```bash
-./management/scripts/sync-agents.sh           # default: claude + opencode
+./management/scripts/sync-agents.sh           # default: claude
 ./management/scripts/sync-agents.sh --all     # + cursor + copilot
 ```
 
 ## Primer uso
 
 1. Completar `management/PROJECT.md`
-2. Completar `management/roadmap/roadmap.yaml` con hitos y épicas reales
+2. Completar `management/roadmap.yaml` (roadmap único multi-proyecto — cada hito/épica lleva `proyecto:`; ver docs/adr/ADR-001) con hitos y épicas reales
 3. `@meta-router status` para ver el estado inicial
 4. `@meta-router [cualquier pedido]` para empezar a trabajar
 

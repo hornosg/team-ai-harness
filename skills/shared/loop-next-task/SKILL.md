@@ -54,9 +54,14 @@ globalmente — pueden colisionar entre proyectos (ej. `E24` existe en `proyecto
    resuelto, ej. `platform/epicas/E24-....md` o `projects/mercado-cercano/epicas/....md`,
    relativo a `management/`). Si no tiene `archivo:`, no es ejecutable por loop — devolver a
    replanificación (ver §4).
-4. Recorrer las tareas de la épica en orden. Elegir la **primera** con checkbox `[ ]` cuyo
+4. **Ubicar el código**: leer `management/projects/<proyecto>/PROJECT.md` (o, si la épica es de
+   `proyecto: platform` pero opera sobre código de un proyecto cliente — como los retrofits RLS —
+   el PROJECT.md del proyecto dueño del servicio que la épica nombra en `servicios:` o en su
+   texto). Ahí está el path raíz del repo y el índice de componentes. NUNCA inferir la ubicación
+   del código por cwd — el loop siempre corre desde `$DEVY_PATH`.
+5. Recorrer las tareas de la épica en orden. Elegir la **primera** con checkbox `[ ]` cuyo
    `Depende de:` esté en `[x]` (o `ninguna`).
-5. Si ninguna tarea cumple la condición → backlog vacío para esta épica/proyecto. Reportar
+6. Si ninguna tarea cumple la condición → backlog vacío para esta épica/proyecto. Reportar
    `NEXT-TASK: empty` y salir sin marcar nada (el runner interpreta esto como fin de
    iteraciones útiles, ver `scripts/loop-runner.sh`).
 
@@ -117,7 +122,7 @@ Al completar (o cortar) la tarea:
 - Una sola tarea por iteración. Nunca encadenar la siguiente tarea en la misma pasada aunque
   quede contexto — el reinicio con contexto limpio es la garantía de calidad del loop.
 - L4 nunca commitea sin sign-off del owner, sin excepción, incluso si el build/test pasan.
-- Nunca editar `.claude/agents/` ni `.opencode/agents/` generados — la skill y el meta-router
+- Nunca editar `.claude/agents/` generados — la skill y el meta-router
   se editan en `agents/`/`skills/` canónicos de team-ai-harness.
 - Si la épica no tiene `archivo:` en el roadmap, o el archivo no tiene tareas en formato
   checkbox con `Depende de:`, no es ejecutable por loop — reportarlo y no improvisar formato.

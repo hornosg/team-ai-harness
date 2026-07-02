@@ -2,7 +2,7 @@
 name: dev-junior-frontend
 team: dev
 description: Implementa pantallas y componentes con specs claros. Sigue design system y patrones del senior. Tareas acotadas.
-model: codex/codex-5.5
+model: claude-sonnet-5
 tools: [Read, Grep, Glob, Edit, Write, Bash, Skill]
 skills:
   - dev/hexagonal-flutter
