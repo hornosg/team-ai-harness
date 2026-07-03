@@ -266,6 +266,9 @@ loop_mode:
   l4_in_loop_policy:
     - "La iteración que detecta l4_keywords implementa hasta el gate (build/test verdes)."
     - "Escribe la escalación en management/escalations/YYYY-MM-DD_<slug-tarea>.md + Engram (mem_save)."
+    - "Verifica el archivo en disco con Read/ls antes de reportar la escalación como cerrada —
+       un Write narrado en texto no es evidencia de que se ejecutó (gap real del piloto E24,
+       2026-07-03: ninguna iteración lo escribió en tiempo real; ver loop-next-task §2)."
     - "NO commitea sin sign-off explícito del owner, sin excepción."
     - "El loop continúa con la próxima tarea sin dependencias pendientes en la iteración siguiente."
   # Presupuesto gobernado por contexto, no por número fijo de iteraciones:
@@ -287,3 +290,32 @@ loop_mode:
   permissions_policy: "--dangerously-skip-permissions sin restricción — decisión explícita del owner, riesgo asumido"
   # Workload de referencia (PROP-008): apto para retrofits mecánicos con patrón ya
   # diseñado (E24-E30). Explícitamente NO aplica a trabajo de aprendizaje del owner (E12-E18).
+  # ─── Plugins de Claude Code en modo loop (E33/T8, decisión del owner 2026-07-03) ────
+  # Los plugins instalados a nivel usuario (superpowers, code-review, context7, engram,
+  # playwright, etc.) inyectan sus hooks y skills en CADA iteración headless (`claude -p`).
+  # No se pueden "desinstalar por iteración" — se gobiernan por política:
+  plugins:
+    # El protocolo del loop manda sobre cualquier mandato de plugin. En particular, el
+    # mandato de superpowers de "invocar skills antes de cualquier respuesta" NO aplica
+    # dentro del loop cuando la skill es interactiva o multiplica turnos.
+    precedence: "loop-next-task > mandatos de plugins"
+    allowed_in_loop:
+      - engram              # REQUERIDO — handoff entre iteraciones vía mem_save con project
+                             # explícito (NO mem_session_summary: falla ambiguous_project en
+                             # cwd multi-repo — ver loop-next-task §5.3, bug E24 2026-07-03)
+      - context7            # consulta puntual de docs de librerías — read-only, 1-2 llamadas
+      - security-guidance   # guía pasiva, no interactiva, no consume turnos extra
+      - "superpowers (solo skills no interactivas: verification-before-completion, systematic-debugging, test-driven-development)"
+    forbidden_in_loop:
+      - "superpowers:brainstorming"                # dialoga con el owner — no hay owner en `claude -p`
+      - "superpowers:dispatching-parallel-agents"  # explosión de turnos vs --max-turns 40
+      - "superpowers:subagent-driven-development"  # ídem — subagentes rompen el presupuesto por iteración
+      - "playwright / claude-in-chrome"            # browser: riesgo de hang en headless, ningún workload de loop lo pide
+      - "feature-dev / frontend-design"            # flujos multi-fase pensados para sesión interactiva
+      - "skill-creator / claude-md-management"     # tooling del owner, no del loop
+    # Overlap plugin vs skill del harness: gana SIEMPRE la skill del harness — es la que
+    # los ceremony levels y el DoD referencian (code-review→code-reviewer, security-guidance→owasp-top10):
+    overlap_policy: "harness_skill_wins"
+    # Si un plugin/skill intenta iniciar diálogo con el owner en modo loop, se trata como
+    # tarea bloqueada: checkpoint (loop-next-task §4.2) y continuar. Nunca esperar input:
+    on_interactive_attempt: "checkpoint_and_continue"

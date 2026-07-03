@@ -72,10 +72,24 @@ globalmente — pueden colisionar entre proyectos (ej. `E24` existe en `proyecto
 - **L3**: requiere `@dev-architect` en el diseño si la tarea lo dice explícitamente; si no,
   ejecutar directo pero dejar registrado en el handoff que fue L3.
 - **L4**: ver `config/routing-rules.yaml → loop_mode` — regla "L4 nunca desatendido". La
-  iteración implementa hasta el gate (build/test verdes), escribe la escalación (Engram +
-  `management/escalations/YYYY-MM-DD_<slug-tarea>.md`) y **NO commitea sin sign-off**. El
-  loop no se detiene por esto: sigue con la próxima tarea sin dependencias pendientes en la
-  siguiente iteración.
+  iteración implementa hasta el gate (build/test verdes) y **NO commitea sin sign-off**. La
+  escalación **no es un paso narrado en el handoff — es un gate mecánico** previo a cerrar la
+  iteración (§5), con verificación obligatoria en este orden:
+  1. Escribir `management/escalations/YYYY-MM-DD_<slug-tarea>.md` con el tool `Write`. No
+     alcanza con describir el contenido de la escalación en el texto de la respuesta.
+  2. Inmediatamente después, confirmar el archivo en disco con `Read` (o `ls` vía Bash) —
+     nunca asumir que un `Write` mencionado en la respuesta se ejecutó realmente.
+  3. Guardar el mismo contenido en Engram con `mem_save` (`project` explícito, ver §5.3).
+  4. Solo si (1) y (2) quedaron verificados, marcar la escalación como cerrada en el handoff
+     y continuar con la próxima tarea sin dependencias pendientes en la siguiente iteración.
+  Si el paso 2 no puede confirmar el archivo en disco, la iteración **no reporta `done`**:
+  reporta `checkpoint <proyecto>/<epica>.<tarea-id>` (§4.2) anotando en el handoff la causa
+  `escalation-write-failed`, y se detiene ahí en vez de asumir que la escalación quedó escrita.
+  **Motivo**: en el piloto E24 (2026-07-03, PLAT-E33 T7) ninguna iteración L4 escribió la
+  escalación en tiempo real pese a reportarla en el texto de salida — se reconstruyó todo
+  retroactivamente (`escalations/2026-07-03_E24-T4-T7-piloto-loop.md`). El paso 2 (verificación
+  con `Read`/`ls`) es lo que cierra ese gap: convierte una instrucción en prosa en un chequeo
+  verificable, igual que el criterio "Hecho cuando" de §3.
 
 ### 3. Verificar "Hecho cuando"
 
@@ -107,12 +121,30 @@ Al completar (o cortar) la tarea:
 2. Actualizar `estado` de la épica en `roadmap.yaml` si corresponde (`pendiente` →
    `en-progreso` en la primera tarea tocada; `en-progreso` → `completo` si era la última y
    el `gate` del hito lo permite) — seguir `skills/shared/roadmap-management/SKILL.md`.
-3. Guardar handoff con `mem_session_summary`:
-   ```
-   Done: [tarea] — [resultado en una línea]
-   Next ready: [próxima tarea desbloqueada] | ninguna (backlog vacío)
-   Blocked: [tarea] (esperando [qué]) | ninguno
-   ```
+3. Guardar handoff en Engram. **No usar `mem_session_summary`** — esa tool no acepta un
+   `project` explícito y el loop siempre corre desde `$ROOT` (`~/Projects`, multi-repo), lo que
+   la hace fallar con `ambiguous_project` en cada iteración (bug confirmado en el piloto E24,
+   2026-07-03: 2 de 3 iteraciones perdieron el handoff por esto). Usar `mem_save` con `project`
+   resuelto explícito en su lugar:
+   1. Resolver el proyecto dueño del código tocado (no el cwd del loop) — `mem_current_project`
+      da candidatos si hace falta, pero normalmente ya se sabe por el `PROJECT.md` leído en
+      §1.4 (ej. la épica es `proyecto: platform` pero el código es de `mercado-cercano` →
+      `project: mercado-cercano`).
+   2. Llamar `mem_save` con:
+      - `title`: `<epica>.<tarea> — <resultado en una línea>`
+      - `project`: el resuelto en el paso anterior (nunca dejarlo vacío/implícito)
+      - `type`: `decision` (o `bugfix`/`discovery` si aplica mejor)
+      - `content` con el formato:
+        ```
+        **What**: [tarea] — [qué se hizo]
+        **Why**: [criterio "Hecho cuando" y cómo se verificó]
+        **Where**: [archivos/paths tocados]
+        **Learned**: Next ready: [próxima tarea desbloqueada] | ninguna (backlog vacío).
+          Blocked: [tarea] (esperando [qué]) | ninguno.
+        ```
+   Si en algún momento `mem_session_summary` deja de fallar en cwd multi-repo (soporta
+   `project` explícito), se puede volver a usar — hasta entonces, `mem_save` es la única
+   ruta confiable en modo loop.
 4. Reportar en el output de la iteración una línea `NEXT-TASK: <resultado>` que el runner
    (`scripts/loop-runner.sh`) usa para decidir si sigue iterando (ver freno por 2 iteraciones
    sin progreso — se mide por diff del roadmap/épica entre iteraciones, no por este string).
@@ -122,10 +154,38 @@ Al completar (o cortar) la tarea:
 - Una sola tarea por iteración. Nunca encadenar la siguiente tarea en la misma pasada aunque
   quede contexto — el reinicio con contexto limpio es la garantía de calidad del loop.
 - L4 nunca commitea sin sign-off del owner, sin excepción, incluso si el build/test pasan.
+- La escalación L4 se verifica con `Read`/`ls` antes de cerrar la iteración (§2) — nunca se
+  asume que un `Write` reportado en texto se ejecutó de verdad. No negociable.
 - Nunca editar `.claude/agents/` generados — la skill y el meta-router
   se editan en `agents/`/`skills/` canónicos de team-ai-harness.
 - Si la épica no tiene `archivo:` en el roadmap, o el archivo no tiene tareas en formato
   checkbox con `Depende de:`, no es ejecutable por loop — reportarlo y no improvisar formato.
+
+## Plugins y skills externos en modo loop
+
+El entorno del owner tiene plugins de Claude Code instalados a nivel usuario (superpowers,
+code-review, context7, engram, playwright, etc.). Sus hooks y skills se inyectan también en
+cada iteración headless (`claude -p`) — no se pueden apagar por iteración, se gobiernan por
+política. Fuente de verdad: `config/routing-rules.yaml → loop_mode.plugins`. Resumen operativo:
+
+1. **Precedencia**: este protocolo (loop-next-task) manda sobre cualquier mandato de plugin.
+   El mandato de superpowers de "invocar skills antes de cualquier respuesta" NO aplica
+   dentro del loop cuando la skill es interactiva o consume turnos en subagentes.
+2. **Permitidos en loop**: `engram` (REQUERIDO — el handoff del §5 depende de él), `context7`
+   (consulta puntual de docs si la tarea toca una librería desconocida — read-only, 1-2
+   llamadas máximo), skills pasivas de guía (`security-guidance`) y las skills no interactivas
+   de superpowers que refuerzan el "Hecho cuando" (`verification-before-completion`,
+   `systematic-debugging`, `test-driven-development`).
+3. **Prohibidos en loop**: cualquier skill que dialogue con el owner
+   (`superpowers:brainstorming`), que despache subagentes
+   (`dispatching-parallel-agents`, `subagent-driven-development` — rompen el presupuesto
+   `--max-turns 40`), o que abra browser (`playwright`, `claude-in-chrome` — riesgo de hang
+   en headless).
+4. **Overlap plugin ↔ skill del harness**: gana SIEMPRE la skill del harness (`code-review`
+   plugin → usar `code-reviewer`; `security-guidance` → usar `owasp-top10` como gate). Los
+   ceremony levels referencian las skills del harness, no los plugins.
+5. **Intento interactivo = bloqueo**: si un plugin o skill pide input del owner en modo loop,
+   tratarlo como checkpoint (§4.2) y continuar. Nunca quedarse esperando input en headless.
 
 ## Salida esperada (para el runner)
 

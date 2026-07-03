@@ -47,8 +47,10 @@ loop_mode` además de las reglas L4 normales:
 - La cadena `@architect + @security` implementa hasta el gate (build/test verdes) pero
   **NO commitea sin sign-off explícito del owner**.
 - La iteración escribe la escalación en `management/escalations/YYYY-MM-DD_<slug-tarea>.md` +
-  Engram (`mem_save`) y retorna. El loop NO se detiene por esto — sigue con la próxima tarea
-  del backlog sin dependencias pendientes.
+  Engram (`mem_save`), **verifica el archivo en disco con Read/ls antes de darla por cerrada**
+  (gap real del piloto E24, 2026-07-03 — ver `loop-next-task` §2 para el gate mecánico
+  completo), y retorna. El loop NO se detiene por esto — sigue con la próxima tarea del
+  backlog sin dependencias pendientes.
 - Esto es "escalar y continuar", no "frenar": distinto del bloqueo interactivo de más arriba,
   donde el orquestador para y espera al owner.
 
