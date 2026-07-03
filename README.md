@@ -1,22 +1,21 @@
 # Team AI Harness
 
-> A multi-team AI agent harness for development, product, and marketing — built for Claude Code (OpenCode/Cursor/Copilot adapters available, deactivated by default).
+> A multi-team AI agent harness for development, product, and marketing — built for Claude Code.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-compatible-blue)](https://claude.ai/code)
-[![OpenCode](https://img.shields.io/badge/OpenCode-compatible-green)](https://opencode.ai)
 
 ---
 
 ## What is this?
 
-A ready-to-use harness of **32 specialized AI agents** organized across three teams (Dev, Product, Marketing) with a central routing layer. You install it ONCE at the root of your multi-project lab (`$DEVY_PATH` — see ADR-001) and get:
+A ready-to-use harness of **32 specialized AI agents** organized across three teams (Dev, Product, Marketing) with a central routing layer. You install it ONCE at the root of your multi-project workspace and get:
 
 - A single entry point (`@meta-router`) that classifies every request and routes it to the right agent chain
 - Ceremony levels (L1–L4) that enforce appropriate rigor based on risk — L4 for anything touching money, auth, or compliance is non-negotiable
 - Spec-driven development with FILE-ID / TEST-ID traceability from plan to code to test
 - Persistent memory across sessions via [Engram](https://github.com/Gentleman-Programming/engram)
-- Adapter sync: canonical agents generate Claude Code format (`.claude/agents/`); OpenCode/Cursor/Copilot adapters exist in the sync script but are deactivated by default (ADR-001)
+- Canonical source in `agents/` generates Claude Code format (`.claude/agents/`); non-Claude adapters are not maintained
 
 ---
 
@@ -51,7 +50,7 @@ Owner
 - **FILE-ID / TEST-ID system** — every planned file gets a traceable ID. Every test maps to a FILE-ID. The code reviewer verifies this mechanically before merge.
 - **Cross-domain pipelines** — launch a feature, run a growth initiative, or manage an incident across Product → Dev → Marketing with a single `@meta-router` command.
 - **Roadmap integration** — agents read the single multi-project `management/roadmap.yaml` (`$DEVY_ROADMAP_PATH`) to contextualize requests. `@meta-router status` crosses roadmap + proposals + specs into one report.
-- **Adapter sync** — one canonical source in `agents/` generates Claude Code output (`.claude/agents/`). OpenCode/Cursor/Copilot adapters remain in the sync script, deactivated by default (ADR-001).
+- **Adapter sync** — one canonical source in `agents/` generates Claude Code output (`.claude/agents/`).
 - **Persistent memory** — all senior agents use [Engram](https://github.com/Gentleman-Programming/engram) to persist architectural decisions, bug resolutions, and session context across conversations. The installer wires Engram MCP into `.claude/settings.local.json` automatically.
 - **Atomic session planning** — multi-step or cross-service work is broken into single-session, verifiable tasks with explicit dependencies and Engram handoffs (`skills/dev/atomic-session-planning/SKILL.md`).
 - **Emergency fallback** — when Anthropic tokens run out, relaunch on Kimi K2 (Ollama Cloud) without code changes. Artifact granularity auto-adjusts via `Detalle de ejecución`.
@@ -60,7 +59,7 @@ Owner
 
 ## Model policy + emergency fallback (kimi)
 
-Default policy (ADR-001): **Anthropic-first** — haiku for routing, sonnet for implementation, opus for critical/L3-L4 (`config/routing-rules.yaml → agent_providers`). When Anthropic tokens run out, the owner relaunches the session with `claude --dangerously-skip-permissions --model kimi-k2.7-code:cloud`; the backing becomes global (kimi) and artifact detail rises to `reforzado`.
+Default policy (ADR-001): **Anthropic-first** — haiku for routing, sonnet for implementation, opus for critical/L3-L4 (`config/routing-rules.yaml → agent_providers`). When Anthropic tokens run out, relaunch the session with `claude --model kimi-k2.7-code:cloud`; the backing becomes global (kimi) and artifact detail rises to `reforzado`.
 
 ### Capability tiers
 
@@ -94,28 +93,28 @@ respected — the haiku/sonnet/opus matrix applies per agent. Under the kimi fal
 per-agent routing is ignored, and quality depends on artifact self-sufficiency (`reforzado`).
 
 **L4 on the kimi fallback**: architect and security require frontier reasoning — L4 does NOT
-auto-execute; it is flagged and escalated to the owner.
+auto-execute; it is flagged and escalated to the human operator.
 
 ---
 
 ## Loop mode
 
 The harness can run **unattended iterations** — a driver that repeatedly invokes
-`@meta-router next-task` with fresh context per iteration, no owner in the loop, until the
-backlog is exhausted or a limit is hit. Origin: PROP-008 / E33 (`epicas/E33-agent-loops-harness.md`).
+`@meta-router next-task` with fresh context per iteration, until the backlog is exhausted
+or a safety limit is hit.
 
 ### When to use it
 
-- **Mechanical work with an already-designed pattern** — e.g. applying the same RLS retrofit
-  (`RULE-09`/`RULE-10`) across a fleet of services, one epic per service, same checklist. The
-  epics/tasks already exist in `roadmap.yaml`; the loop just executes them one at a time.
+- **Mechanical work with an already-designed pattern** — e.g. applying the same security
+  retrofit across a fleet of services, one epic per service, same checklist. The epics/tasks
+  already exist in `roadmap.yaml`; the loop just executes them one at a time.
 - Tasks must already be atomic (`skills/dev/atomic-session-planning`) with a verifiable
   `Hecho cuando` — the loop does not invent scope.
 
 ### When NOT to use it
 
-- **Owner-learning work** — e.g. a Kubernetes migration where the explicit goal is that the
-  owner learns the tooling by doing it. A loop that generates the manifests destroys that
+- **Learning-by-doing work** — e.g. a Kubernetes migration where the explicit goal is that the
+  user learns the tooling by doing it. A loop that generates the manifests destroys that
   value. Check the epic/proposal for this kind of intent before looping over it.
 - Work without a clear atomic breakdown yet — plan first (`atomic-session-planning`), loop
   second.
@@ -151,22 +150,42 @@ backlog is exhausted or a limit is hit. Origin: PROP-008 / E33 (`epicas/E33-agen
 `config/routing-rules.yaml → loop_mode` is the source of truth. Summary: an L4 task
 (`l4_keywords` — money, auth, identity, compliance) is implemented up to the gate
 (build/test green), the escalation is written to `management/escalations/YYYY-MM-DD_<slug>.md`
-+ Engram, and **the iteration does not commit without explicit owner sign-off**. This is
++ Engram, and **the iteration does not commit without explicit human sign-off**. This is
 "escalate and continue" — the loop does not halt the whole run, it just moves to the next
 unblocked task on the next iteration.
 
 ### Permissions — required before running
 
-The loop runs `claude -p` unattended with `--dangerously-skip-permissions` (owner override,
-2026-07-02 — supersedes the original "never scoped over `$HOME`" mitigation from PROP-008: the
-owner runs it unrestricted rather than have the loop stall on permission prompts). Risk is
-explicitly assumed by the owner, not auto-decided by the loop.
+The loop runs `claude -p` unattended. By default it expects a non-interactive environment where
+permission prompts would stall execution, so the caller must explicitly opt into unattended
+operation. Risk is assumed by the human operator, not auto-decided by the loop.
 
 - The kill-switch (`touch .loop-stop` in the target repo root) is the manual emergency stop —
-  check it works before leaving a loop unattended for long stretches. It's the primary safety
-  net now that the permission gate is off.
-- L4 tasks still never commit unattended (see `loop_mode` above) — that guardrail is
-  independent of the permissions flag and stays in force.
+  check it works before leaving a loop unattended for long stretches.
+- L4 tasks still never commit unattended (see `loop_mode` above) — that guardrail stays in
+  force regardless of the permission mode.
+
+### Plugins in loop mode
+
+User-level Claude Code plugins (superpowers, code-review, context7, engram, playwright, …)
+inject their hooks and skills into every headless iteration too — they can't be turned off
+per-iteration, so they are governed by policy instead. Source of truth:
+`config/routing-rules.yaml → loop_mode.plugins`. Summary:
+
+- **Precedence**: the loop protocol (`loop-next-task`) overrides any plugin mandate —
+  including superpowers' "invoke skills before any response" when the skill is interactive.
+- **Allowed**: `engram` (required — the inter-iteration handoff depends on it), `context7`
+  (one-shot library doc lookups), passive guidance skills, and superpowers' non-interactive
+  process skills (`verification-before-completion`, `systematic-debugging`,
+  `test-driven-development`).
+- **Forbidden**: anything that dialogues with the user (`superpowers:brainstorming`),
+  spawns subagents (`dispatching-parallel-agents`, `subagent-driven-development` — they blow
+  the `--max-turns 40` budget), or opens a browser (`playwright`, `claude-in-chrome` — hang
+  risk in headless).
+- **Overlap**: when a plugin duplicates a harness skill (`code-review` vs `code-reviewer`,
+  `security-guidance` vs `owasp-top10`), the harness skill always wins — it's the one the
+  ceremony gates reference.
+- **Interactive attempt = blocked task**: checkpoint and continue; never wait for input.
 
 ### Usage
 
@@ -185,7 +204,6 @@ touch .loop-stop                                              # emergency stop
 |------|---------|---------|
 | Node.js | ≥ 20.19.0 | [nodejs.org](https://nodejs.org) |
 | Claude Code | latest | `npm install -g @anthropic-ai/claude-code` |
-| OpenCode | latest | `npm install -g opencode-ai` |
 | OpenSpec | latest | `npm install -g @fission-ai/openspec@latest` |
 | Engram | latest | `brew install gentleman-programming/tap/engram` |
 
@@ -201,12 +219,6 @@ Luego, `./scripts/install-management.sh /path/to/project` configura automáticam
 
 ```bash
 python3 management/scripts/merge-claude-settings.py .
-```
-
-Para OpenCode:
-
-```bash
-engram setup opencode
 ```
 
 ---
@@ -268,13 +280,13 @@ cd $DEVY_PATH && claude
 | L3 | Architectural change, DB migration | Architect + TL + Senior + QA + Monitoring |
 | **L4** | **Money / Auth / Compliance** | **Architect + Security (both, non-negotiable)** + TL + Senior + QA + Monitoring |
 
-**L4 triggers** (hardcoded, can't be downgraded): payment, auth, token, wallet, session, PCI, BCRA, compliance.
+**L4 triggers** (hardcoded, can't be downgraded): payment, auth, token, wallet, session, PCI, compliance.
 
 ---
 
 ## Document Flow
 
-Each document has exactly one owner:
+Each document has exactly one owning agent:
 
 | Document | Owner agent | When |
 |----------|-------------|------|
@@ -282,7 +294,7 @@ Each document has exactly one owner:
 | `roadmap/epicas/ENN-*.md` | orchestrators | Proposal approved |
 | `docs/adr/ADR-XX.md` | `architect` | Structural decision L3/L4 |
 | `openspec/changes/[name]/tasks.md` | `architect` (L3/L4) / `technical-leader` (L2/L3) | Before coding |
-| FILE-IDs (F-NNN) + TEST-IDs (T-NNN) | same as tasks.md owner | Inside tasks.md |
+| FILE-IDs (F-NNN) + TEST-IDs (T-NNN) | same as tasks.md owning agent | Inside tasks.md |
 | Code | `senior-backend` / `senior-frontend` | Implementation |
 | QA report | `qa` | Before sign-off |
 | Code review | `technical-leader` | Every PR L2+ |
@@ -334,17 +346,14 @@ Runs automatically: `Product (define) → Dev (implement) → Marketing (launch)
 
 ## Modifying Agents
 
-Canonical sources live in `agents/`. Generated files in `.claude/agents/` and `.opencode/agents/` are **never edited directly**.
+Canonical sources live in `agents/`. Generated files in `.claude/agents/` are **never edited directly**.
 
 ```bash
 # Edit canonical source
 vim agents/dev/architect.md
 
-# Sync to all configured adapters
+# Sync to Claude Code
 ./scripts/sync-agents.sh
-
-# Sync to all adapters (Claude, OpenCode, Cursor, Copilot)
-./scripts/sync-agents.sh --all
 
 # Dry run
 ./scripts/sync-agents.sh --dry-run
@@ -381,7 +390,6 @@ team-ai-harness/
 │   ├── install-management.sh      ← installer for any project
 │   └── validate-artifacts.py      ← conformance checker (routing + templates + reforzado epics)
 ├── .claude/agents/                ← generated for Claude Code
-├── .opencode/agents/              ← generated for OpenCode
 ├── AGENTS.md                      ← full agent roster + flow diagram
 └── PROJECT.md                     ← project identity template
 ```
@@ -459,7 +467,7 @@ Exit 0 = all pass. Exit 1 = one or more failures (CI-safe).
 
 This harness relies on **[Engram](https://github.com/Gentleman-Programming/engram)** by **[Gentleman Programming](https://github.com/Gentleman-Programming)** for persistent memory across agent sessions and chat compactions.
 
-Engram provides a single binary (zero dependencies) backed by SQLite + FTS5, exposed as an MCP server. It enables any MCP-compatible agent — Claude Code, OpenCode, Gemini CLI, VS Code Copilot — to remember architectural decisions, bug resolutions, and session context indefinitely.
+Engram provides a single binary (zero dependencies) backed by SQLite + FTS5, exposed as an MCP server. It enables any MCP-compatible agent — Claude Code, Cursor, Copilot, Gemini CLI — to remember architectural decisions, bug resolutions, and session context indefinitely.
 
 ```bash
 brew install gentleman-programming/tap/engram
@@ -487,7 +495,7 @@ Contributions welcome. A few conventions to keep the harness portable:
 
 - **No project-specific content in agents** — agents must work for any project. Project identity lives in `PROJECT.md`, not in agent files.
 - **Skills are documents, not commands** — skills live in `skills/<name>/SKILL.md` and are read by agents. They don't go in `.claude/commands/`.
-- **Canonical source in `agents/`** — never edit generated files in `.claude/agents/` or `.opencode/agents/` directly.
+- **Canonical source in `agents/`** — never edit generated files in `.claude/agents/` directly.
 - **L4 is non-negotiable** — don't add exceptions or workarounds for money/auth/compliance ceremony requirements.
 
 To add a new agent:
