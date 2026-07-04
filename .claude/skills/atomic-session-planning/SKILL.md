@@ -77,6 +77,10 @@ Usá una lista plana y numerada. Evitá subtareas anidadas.
 
 **Combinar** solo si dos tareas son triviales, secuenciales y ambas entran en <10 tool calls.
 
+> Esto es split/combine a nivel **sesión/tarea**. Para split a nivel **épica/roadmap** (una épica
+> agrupa varios servicios o su volumen es grande) rige P-22 (`PROJECT.md`) — mismo criterio,
+> aplicado un nivel más arriba, en `skills/shared/roadmap-management/SKILL.md`.
+
 ## Workflow de ejecución
 
 Cuando el usuario diga "hagamos la tarea X":

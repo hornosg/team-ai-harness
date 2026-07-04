@@ -52,8 +52,10 @@ globalmente — pueden colisionar entre proyectos (ej. `E24` existe en `proyecto
    satisfechas.
 3. Leer el archivo de esa épica (`archivo:` en el roadmap — ya viene con el prefijo de scope
    resuelto, ej. `platform/epicas/E24-....md` o `projects/mercado-cercano/epicas/....md`,
-   relativo a `management/`). Si no tiene `archivo:`, no es ejecutable por loop — devolver a
-   replanificación (ver §4).
+   relativo a `management/`). **Si no tiene `archivo:`, o el archivo existe pero no tiene tareas
+   en formato checkbox con `Depende de:`, NO es un backlog vacío ni un corte — es trabajo
+   legítimo de la iteración.** Ver §1bis: escribir el archivo de la épica es la tarea de esta
+   iteración, no un motivo para devolver a replanificación humana.
 4. **Ubicar el código**: leer `management/projects/<proyecto>/PROJECT.md` (o, si la épica es de
    `proyecto: platform` pero opera sobre código de un proyecto cliente — como los retrofits RLS —
    el PROJECT.md del proyecto dueño del servicio que la épica nombra en `servicios:` o en su
@@ -64,6 +66,46 @@ globalmente — pueden colisionar entre proyectos (ej. `E24` existe en `proyecto
 6. Si ninguna tarea cumple la condición → backlog vacío para esta épica/proyecto. Reportar
    `NEXT-TASK: empty` y salir sin marcar nada (el runner interpreta esto como fin de
    iteraciones útiles, ver `scripts/loop-runner.sh`).
+
+### 1bis. Autoría de épica sin `archivo:` (cuenta como la tarea de la iteración)
+
+Cuando §1.3 detecta que la épica elegida no tiene `archivo:` (o lo tiene pero sin tareas en
+formato checkbox), la iteración escribe ese archivo en vez de devolver a replanificación humana:
+
+1. **Buscar un patrón ya establecido antes de diseñar desde cero.** Revisar
+   `management/rules/` (ej. RULE-09/RULE-10 + `platform-architecture.md` §3 para el patrón
+   "Retrofit RLS fail-closed") y épicas hermanas ya completadas con el mismo prefijo de nombre
+   (ej. otra "Retrofit RLS fail-closed: <servicio>" con `estado: completo`). Si existe, aplicarlo
+   mecánicamente — el contexto es el mismo entre servicios, lo que cambia es el volumen
+   (archivos/tablas afectadas). Si no existe un patrón previo, es una épica genuinamente nueva y
+   la ambigüedad de diseño es mayor (pesa en el gate del punto 4).
+2. Invocar `skills/shared/roadmap-management/SKILL.md` para escribir el archivo de la épica en el
+   `Detalle de ejecución` que corresponda (`reforzado` si el proyecto lo usa) — mismo estándar
+   que `platform/epicas/PLAT-E24-retrofit-rls-ledger-service.md`.
+3. **Aplicar P-22 (`PROJECT.md`) sin negociar**: si la épica agrupa varios servicios/entidades o
+   su volumen esperado es grande, partir en un grupo de tareas por servicio/unidad — nunca una
+   tarea única monolítica.
+4. Agregar `archivo:` a la entrada correspondiente en `roadmap.yaml`.
+5. Esta autoría **es el trabajo completo de la iteración** — no se ejecuta ninguna tarea del
+   plan recién escrito en la misma pasada (mismo guardrail que "una sola tarea por iteración").
+   Cerrar con handoff (§5) normal, pero **sin marcar ningún `[x]`**.
+6. **Gate de revisión antes de que otra iteración ejecute T1 del plan recién escrito.** Reportar
+   `NEXT-TASK: checkpoint <proyecto>/<epica> — plan escrito, pendiente de revisión` (no `done`)
+   si se cumple **cualquiera** de estas condiciones:
+   - La épica es ceremony `L3` o `L4` (los retrofits RLS lo son siempre — RULE-10 exige
+     @architect + @security en el diseño).
+   - No hay precedente: ninguna épica hermana con el mismo patrón llegó a `estado: completo`
+     todavía (primera vez que el loop aplica ese tipo de épica).
+   - El agente tuvo que resolver una ambigüedad de diseño real al escribir las tareas (el
+     patrón existente no cubría el caso tal cual).
+   Si **ninguna** aplica (ceremony L1/L2, patrón con al menos un precedente ya completo y
+   validado por el owner, sin ambigüedad al escribir), la iteración siguiente puede ejecutar T1
+   directo sin pedir revisión — no todo plan recién escrito necesita frenar el loop, solo los
+   que son L3/L4 o genuinamente nuevos.
+   **Motivo**: sin este gate, un loop desatendido podría escribir un plan mal escopeado y
+   ejecutarlo varias iteraciones antes de que el owner lo note — mismo riesgo que motivó "L4
+   nunca desatendido" en §2, aplicado un paso antes (a la autoría del plan, no solo a su
+   ejecución).
 
 ### 2. Ejecutar según ceremony level
 
@@ -159,7 +201,9 @@ Al completar (o cortar) la tarea:
 - Nunca editar `.claude/agents/` generados — la skill y el meta-router
   se editan en `agents/`/`skills/` canónicos de team-ai-harness.
 - Si la épica no tiene `archivo:` en el roadmap, o el archivo no tiene tareas en formato
-  checkbox con `Depende de:`, no es ejecutable por loop — reportarlo y no improvisar formato.
+  checkbox con `Depende de:`, escribirlo es la tarea de la iteración (§1bis) — nunca
+  improvisar formato, y nunca ejecutar T1 de un plan recién escrito sin pasar el gate de
+  revisión de §1bis.6 cuando aplique.
 
 ## Plugins y skills externos en modo loop
 
@@ -194,6 +238,11 @@ Una línea final parseable:
 ```
 NEXT-TASK: done <proyecto>/<epica>.<tarea-id> | checkpoint <proyecto>/<epica>.<tarea-id> | blocked <proyecto>/<epica>.<tarea-id> | empty
 ```
+
+`checkpoint` cubre tres causas distintas — anotar cuál en el handoff (§5), no solo el string:
+checkpoint intermedio por presupuesto de contexto (§4.2), falla al verificar la escalación L4 en
+disco (`escalation-write-failed`, §2), o plan de épica recién escrito pendiente de revisión
+(`plan-authored-pending-review`, §1bis.6).
 
 `scripts/loop-runner.sh` compara el diff de `roadmap.yaml` + archivo de épica entre
 iteraciones consecutivas para decidir el freno de "2 iteraciones sin progreso" — no confía

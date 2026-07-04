@@ -271,6 +271,16 @@ loop_mode:
        2026-07-03: ninguna iteración lo escribió en tiempo real; ver loop-next-task §2)."
     - "NO commitea sin sign-off explícito del owner, sin excepción."
     - "El loop continúa con la próxima tarea sin dependencias pendientes en la iteración siguiente."
+  # Autoría de épica sin `archivo:` — cuenta como el trabajo de la iteración, no como corte
+  # (loop-next-task §1bis, 2026-07-04). El gate de revisión antes de ejecutar T1 de un plan
+  # recién escrito aplica si: ceremony L3/L4, sin precedente (ninguna épica hermana completa
+  # con el mismo patrón), o ambigüedad de diseño real al escribirlo.
+  plan_authoring_gate:
+    always_review_if:
+      - "ceremony L3 o L4"
+      - "sin precedente: ninguna épica hermana del mismo patrón en estado completo"
+      - "ambigüedad de diseño real al escribir las tareas"
+    skip_review_if: "ceremony L1/L2 + patrón con precedente completo y validado + sin ambigüedad"
   # Presupuesto gobernado por contexto, no por número fijo de iteraciones:
   budget:
     unit: contexto             # no "iteraciones" — una tarea por iteración siempre

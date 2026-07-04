@@ -154,11 +154,17 @@ level dice cuánto *proceso*; el `Detalle de ejecución` dice cuánta *especific
 
 **Al escribir tareas de una épica (post-aprobación):**
 1. Toda tarea es **atómica** — una acción, un resultado verificable. Si describe una "fase", partila.
-2. Toda tarea tiene **"Hecho cuando"** = comando o check concreto + resultado esperado observable.
-3. En `reforzado`: agregar `Objetivo` (path/módulo exacto) y `Depende de` (orden explícito).
-4. L3/L4 o `reforzado`: agregar `Contrato` (firma pública) — delegar a `skills/dev/planner` para
+2. **Dividir cuando el tamaño amerita (P-22, no negociable):** si la épica agrupa múltiples
+   servicios/entidades independientes, o su volumen esperado (archivos, tablas, endpoints) es
+   grande, partir en un grupo de tareas por servicio/unidad — nunca una tarea única monolítica
+   que abarque todo el bundle. Se decide al escribir la épica, no "se evalúa después". Ejemplo
+   real: una épica que agrupe 4 servicios con volúmenes dispares (ej. 21 archivos de migración
+   vs. 5) necesita un grupo de tareas por servicio, cada uno con su propio "Hecho cuando".
+3. Toda tarea tiene **"Hecho cuando"** = comando o check concreto + resultado esperado observable.
+4. En `reforzado`: agregar `Objetivo` (path/módulo exacto) y `Depende de` (orden explícito).
+5. L3/L4 o `reforzado`: agregar `Contrato` (firma pública) — delegar a `skills/dev/planner` para
    FILE-IDs/TEST-IDs en `workspace/[nombre]/tasks.md`.
-5. Completar **Contexto a cargar** de la épica: lista cerrada de paths a leer. Si un dato no está
+6. Completar **Contexto a cargar** de la épica: lista cerrada de paths a leer. Si un dato no está
    ahí ni en los archivos linkeados, el ejecutor abierto no lo conoce — explicítalo.
 
 Las **propuestas** quedan livianas (una línea por tarea, acción + resultado). El detalle atómico se
