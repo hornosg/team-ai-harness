@@ -28,14 +28,16 @@ Determina el provider y modelo óptimo para una tarea, aplicando las reglas de `
 
 ## Runtime y backing model (leer primero)
 
-El ruteo por-agente solo se respeta tal cual bajo **OpenCode**. Bajo **Claude Code** todos los
-subagentes comparten un **backing model global** (el que apunte `ANTHROPIC_BASE_URL`; hoy
-`kimi-k2.7-code:cloud` vía Ollama Cloud). Ver `routing-rules.yaml → model_resolution`.
+Bajo **Claude Code con backend Anthropic nativo** (el caso normal, ADR-001) el `model:` del
+frontmatter de cada agente SE RESPETA — la matriz haiku/sonnet/opus de
+`routing-rules.yaml → agent_providers` aplica por agente.
 
-Implicancia: cuando el backing es **open_mid** (Hermes/Kimi/Ollama) la recomendación de provider
-es informativa, pero **el `Detalle de ejecución` de los artefactos pasa a `reforzado`** sí o sí
-(`routing-rules.yaml → capability_tiers`). La calidad la da la autosuficiencia del artefacto, no el
-modelo. L4 nunca se auto-aprueba sobre open_mid: se marca y escala al owner.
+**Excepción — fallback kimi**: si el owner relanzó la sesión con
+`ollama launch claude --model kimi-k2.7-code:cloud -- --dangerously-skip-permissions` (sin tokens Anthropic),
+el backing es GLOBAL: todos los agentes corren kimi, el ruteo por-agente se ignora, y
+**el `Detalle de ejecución` de los artefactos pasa a `reforzado`** sí o sí
+(`routing-rules.yaml → capability_tiers`). La calidad la da la autosuficiencia del artefacto, no
+el modelo. L4 nunca se auto-aprueba sobre ese backing: se marca y escala al owner.
 
 ## Paso 1 — Leer configuración
 
