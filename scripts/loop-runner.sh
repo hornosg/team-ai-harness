@@ -11,7 +11,8 @@
 #     únicamente en el string NEXT-TASK que reporta la skill).
 #
 # Uso:
-#   ./scripts/loop-runner.sh [--proyecto <nombre>] [--roadmap path/a/roadmap.yaml]
+#   ./scripts/loop-runner.sh [--proyecto <nombre>] [--epica <KEY-ENN>]
+#                            [--roadmap path/a/roadmap.yaml]
 #                            [--max-iterations N] [--dry-run]
 #
 # roadmap.yaml es ÚNICO y multi-proyecto desde 2026-07-02 (decisión del owner) — path por
@@ -25,6 +26,16 @@
 # proyecto=mercado-cercano cuando la épica target es proyecto=platform). Pasarlo siempre que
 # se sepa de antemano contra qué proyecto corre el loop.
 #
+# --epica (opcional) fija el loop a UNA épica puntual del roadmap, por id prefijado
+# (ej. PLAT-E25 — el prefijo resuelve el proyecto vía el bloque `prefijos:` del roadmap,
+# así que --proyecto se vuelve redundante aunque puede pasarse igual; si ambos vienen y no
+# coinciden, la skill corta con blocked). Sin --epica el comportamiento es el histórico:
+# la skill elige épica por estado/prioridad/depende_de. Con --epica, la selección ignora
+# cualquier otra épica en-progreso y trabaja SOLO tareas de esa épica hasta que se completa
+# (NEXT-TASK: empty) o queda bloqueada (NEXT-TASK: blocked — el runner también corta ahí,
+# reiterar una épica fijada que no puede avanzar no aporta nada). Origen: pedido del owner
+# 2026-07-08 — PLAT-E25 quedó huérfana porque la selección global nunca la elegía.
+#
 # Permisos: corre con --dangerously-skip-permissions (override del owner, 2026-07-02 —
 # supersede la mitigación original de PROP-008 de nunca usarlo sobre $HOME). Riesgo
 # asumido explícitamente por el owner. El kill-switch (.loop-stop) es el freno manual
@@ -35,6 +46,7 @@ set -euo pipefail
 ROOT="$(pwd)"
 ROADMAP_GLOB="${DEVY_ROADMAP_PATH:-$HOME/Projects/management/roadmap.yaml}"
 PROYECTO=""        # vacío = dejar que @meta-router infiera el proyecto del cwd (ver --proyecto)
+EPICA=""           # vacío = selección automática de épica; ver --epica arriba
 MAX_ITERATIONS=0   # 0 = sin límite duro; el freno real es no_progress_threshold
 MAX_TURNS=40
 NO_PROGRESS_THRESHOLD=2
@@ -45,6 +57,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --roadmap) ROADMAP_GLOB="$2"; shift 2 ;;
     --proyecto) PROYECTO="$2"; shift 2 ;;
+    --epica) EPICA="$2"; shift 2 ;;
     --max-iterations) MAX_ITERATIONS="$2"; shift 2 ;;
     --max-turns) MAX_TURNS="$2"; shift 2 ;;
     --dry-run) DRY_RUN=true; shift ;;
@@ -120,13 +133,27 @@ while true; do
   if [[ -n "$PROYECTO" ]]; then
     PROMPT="$PROMPT --proyecto $PROYECTO"
   fi
+  if [[ -n "$EPICA" ]]; then
+    PROMPT="$PROMPT --epica $EPICA"
+  fi
   log "iteración $iteration — invocando '$PROMPT' (contexto fresco, --max-turns $MAX_TURNS)"
 
   output="$(claude -p "$PROMPT" --max-turns "$MAX_TURNS" --dangerously-skip-permissions 2>&1 || true)"
   echo "$output"
 
   if echo "$output" | grep -q "NEXT-TASK: empty"; then
-    log "backlog vacío reportado por la skill → deteniendo"
+    if [[ -n "$EPICA" ]]; then
+      log "épica $EPICA sin tareas ejecutables (completa) → deteniendo"
+    else
+      log "backlog vacío reportado por la skill → deteniendo"
+    fi
+    break
+  fi
+
+  # Con épica fijada, blocked es terminal: reiterar no puede desbloquearla (la dependencia
+  # o el checkpoint que la frena requiere acción del owner, no otra pasada del loop).
+  if [[ -n "$EPICA" ]] && echo "$output" | grep -q "NEXT-TASK: blocked"; then
+    log "épica $EPICA bloqueada (ver handoff en Engram) → deteniendo"
     break
   fi
 

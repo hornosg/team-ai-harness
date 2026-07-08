@@ -10,8 +10,9 @@ triggers:
 # Loop Next Task
 
 Driver de una sola iteración de loop autónomo: elige la primera tarea `[ ]` desbloqueada del
-roadmap, la ejecuta de punta a punta según su ceremony level, y deja el estado en disco +
-Engram listo para que la próxima iteración (contexto fresco) retome sin ambigüedad.
+roadmap (o de UNA épica fijada por el owner con `--epica`, ver §0), la ejecuta de punta a
+punta según su ceremony level, y deja el estado en disco + Engram listo para que la próxima
+iteración (contexto fresco) retome sin ambigüedad.
 
 Invocada como comando especial `next-task` de `@meta-router` (ver
 `agents/orchestrators/meta-router.md`). No se invoca a mano salvo para depurar el loop.
@@ -26,7 +27,7 @@ del proyecto cliente). Los IDs (`HNN`, `ENN`) son únicos **dentro de un proyect
 globalmente — pueden colisionar entre proyectos (ej. `E24` existe en `proyecto: platform` y en
 `proyecto: mercado-cercano` con contenido distinto).
 
-**Cómo se resuelve el path y el proyecto:**
+**Cómo se resuelve el path, el proyecto y la épica:**
 1. Path del roadmap: `$DEVY_ROADMAP_PATH` si está seteada; si no, el path que venga en
    `--roadmap <path>` (típicamente desde `scripts/loop-runner.sh`); si tampoco, fallback
    `~/Projects/management/roadmap.yaml`.
@@ -39,17 +40,54 @@ globalmente — pueden colisionar entre proyectos (ej. `E24` existe en `proyecto
    (2026-07-02, cuando el roadmap todavía era multi-archivo) — el mismo riesgo de inferencia
    persiste con el archivo único, ahora a nivel de filtro `proyecto:` en vez de selección de
    archivo. **Preferir siempre `--proyecto` explícito en corridas de loop no supervisadas.**
+3. Épica (opcional): si el comando llegó como `next-task --epica <KEY-ENN>` (id prefijado tal
+   como figura en `id:` del roadmap, ej. `PLAT-E25`), el loop queda **fijado a esa épica** —
+   ver §0. El prefijo de la épica resuelve el proyecto vía el bloque `prefijos:` del roadmap;
+   si además vino `--proyecto` y no coincide con ese prefijo, es un error de invocación:
+   reportar `NEXT-TASK: blocked <epica> — proyecto-mismatch` y salir sin tocar nada.
+   Sin `--epica`, la selección automática de §1 aplica igual que siempre.
 
 ## Algoritmo
+
+### 0. Modo épica fijada (`--epica`, opcional)
+
+Cuando vino `--epica <KEY-ENN>`, la selección de épica de §1.2 **no corre**: la épica ya está
+decidida por el owner y tiene precedencia sobre cualquier otra `en-progreso` del roadmap.
+Antes de pasar a las tareas (§1.3 en adelante), validar en este orden:
+
+1. **Existe**: hay una entrada con ese `id:` exacto en el roadmap. Si no →
+   `NEXT-TASK: blocked <epica> — epica-inexistente` y salir.
+2. **Proyecto consistente**: el `proyecto:` de la entrada coincide con el que resuelve el
+   prefijo del id (bloque `prefijos:`) y con `--proyecto` si vino (ver resolución, punto 3).
+3. **No está completa**: si `estado: completo` → `NEXT-TASK: empty` (nada que hacer; el
+   runner corta la corrida).
+4. **Dependencias satisfechas**: si la entrada tiene `depende_de:` (ver §1ter), TODAS las
+   épicas listadas deben tener `estado: completo`. Si alguna no →
+   `NEXT-TASK: blocked <proyecto>/<epica> — depende_de pendiente: <ids>` y salir sin marcar
+   nada. Fijar una épica NO saltea sus dependencias — si el owner quiere forzarla igual,
+   edita el `depende_de:` en el roadmap, no el loop.
+
+Pasadas las validaciones, continuar en §1.3 con esa épica (incluida la autoría de plan de
+§1bis si no tiene `archivo:` — sus gates aplican idénticos). Iteración tras iteración el
+runner repite el mismo `--epica`, así que el loop trabaja SOLO tareas de esa épica hasta
+`NEXT-TASK: empty` (épica completa) o `blocked`/`checkpoint` (requiere acción del owner).
+El guardrail "una sola tarea por iteración" no cambia. Origen: pedido del owner 2026-07-08 —
+PLAT-E25 quedó huérfana porque la selección automática nunca la elegía.
 
 ### 1. Elegir la tarea
 
 1. Cargar `$DEVY_ROADMAP_PATH` (o el path resuelto arriba) y filtrar por el `proyecto`
    resuelto. Todo lo que sigue opera **solo** sobre `hitos:`/`epicas:` de ese `proyecto`.
-2. Del subconjunto filtrado, tomar la épica con `estado: en-progreso` de mayor prioridad en el
-   hito `fase_actual` de ese proyecto. Si no hay ninguna `en-progreso`, tomar la primera
-   `pendiente` cuyas dependencias (árbol de ejecución, si existe para ese proyecto) estén
-   satisfechas.
+2. (Solo sin `--epica` — si vino, la épica ya quedó fijada en §0.) Del subconjunto filtrado,
+   tomar la épica con `estado: en-progreso` de mayor prioridad en el hito `fase_actual` de ese
+   proyecto. Si no hay ninguna `en-progreso` elegible, tomar la primera `pendiente` elegible.
+   **Elegible = su `depende_de:` está completamente satisfecho (§1ter)** — y esto aplica
+   TAMBIÉN a las `en-progreso`: una épica arrancada fuera de orden con dependencias sin
+   cumplir se saltea (anotándolo en el handoff), no se premia por estar empezada. Verificar
+   contra los campos, nunca contra los comentarios narrativos del roadmap: el árbol en
+   comentarios probó driftear y ser inaplicable mecánicamente (el loop autónomo escribió el
+   plan de PLAT-E26 salteándose PLAT-E25 pese a que el árbol decía E24 → E25 → E26 — commit
+   3d802cb, 2026-07-08).
 3. Leer el archivo de esa épica (`archivo:` en el roadmap — ya viene con el prefijo de scope
    resuelto, ej. `platform/epicas/E24-....md` o `projects/mercado-cercano/epicas/....md`,
    relativo a `management/`). **Si no tiene `archivo:`, o el archivo existe pero no tiene tareas
@@ -106,6 +144,23 @@ formato checkbox), la iteración escribe ese archivo en vez de devolver a replan
    ejecutarlo varias iteraciones antes de que el owner lo note — mismo riesgo que motivó "L4
    nunca desatendido" en §2, aplicado un paso antes (a la autoría del plan, no solo a su
    ejecución).
+
+### 1ter. Dependencias estructuradas (`depende_de:`)
+
+Cada entrada de épica en `roadmap.yaml` puede llevar un campo `depende_de:` — lista de ids
+prefijados de épicas (ej. `[PLAT-E24]`) que deben estar `estado: completo` antes de que esta
+épica sea elegible. Es la **única fuente verificable por máquina** del orden de ejecución:
+
+- El árbol narrativo en comentarios YAML del roadmap sigue existiendo como documentación,
+  pero **no gobierna la selección** — driftea (quedó diciendo "E33 EN PROgreso" con
+  `estado: completo` al lado) y no es parseable de forma confiable.
+- Sin `depende_de:`, la épica se considera desbloqueada (equivalente al `Depende de: ninguna`
+  de las tareas).
+- La verificación es literal: buscar cada id listado en el roadmap y chequear
+  `estado: completo`. Un id inexistente cuenta como dependencia NO satisfecha (roadmap
+  inconsistente — anotarlo en el handoff).
+- Mantenimiento: lo escribe `skills/shared/roadmap-management/SKILL.md` al crear/actualizar
+  épicas; al migrar orden desde comentarios, el campo gana ante cualquier discrepancia.
 
 ### 2. Ejecutar según ceremony level
 
@@ -238,6 +293,12 @@ Una línea final parseable:
 ```
 NEXT-TASK: done <proyecto>/<epica>.<tarea-id> | checkpoint <proyecto>/<epica>.<tarea-id> | blocked <proyecto>/<epica>.<tarea-id> | empty
 ```
+
+En modo `--epica` hay además un `blocked` a nivel épica (sin `.<tarea-id>`), con la causa
+inline: `blocked <proyecto>/<epica> — depende_de pendiente: <ids>` |
+`blocked <epica> — epica-inexistente` | `blocked <epica> — proyecto-mismatch` (§0). El runner
+corta la corrida ante cualquier `blocked` cuando la épica está fijada — reiterar no la
+desbloquea. `empty` en modo `--epica` significa "épica completa", no backlog global vacío.
 
 `checkpoint` cubre tres causas distintas — anotar cuál en el handoff (§5), no solo el string:
 checkpoint intermedio por presupuesto de contexto (§4.2), falla al verificar la escalación L4 en

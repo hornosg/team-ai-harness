@@ -101,7 +101,7 @@ Al recibir cualquier pedido:
 | `crear epica [X]` | Ejecutar `skills/shared/roadmap-management/SKILL.md` — crear PROP en el proyecto resuelto |
 | `nueva propuesta [X]` | Idem |
 | `actualizar estado E0N` | Idem — actualizar la entrada correspondiente en el roadmap único |
-| `next-task` / `next-task --proyecto <nombre>` / `next-task --roadmap <path>` | Ejecutar `skills/shared/loop-next-task/SKILL.md` — elige y ejecuta la primera tarea desbloqueada de la épica activa, pensado para loops autónomos sin el owner en el medio (ver `scripts/loop-runner.sh`). Sin `--proyecto`, resuelve el proyecto por el cwd (Paso 0) — si el cwd cae dentro de un servicio de otro proyecto, puede filtrar por ese proyecto en vez del que se quiere ejecutar. `--proyecto <nombre>` fuerza el filtro exacto; `--roadmap <path>` fuerza el archivo (rara vez necesario, hay uno solo) |
+| `next-task` / `next-task --proyecto <nombre>` / `next-task --epica <KEY-ENN>` / `next-task --roadmap <path>` | Ejecutar `skills/shared/loop-next-task/SKILL.md` — elige y ejecuta la primera tarea desbloqueada de la épica activa, pensado para loops autónomos sin el owner en el medio (ver `scripts/loop-runner.sh`). Sin `--proyecto`, resuelve el proyecto por el cwd (Paso 0) — si el cwd cae dentro de un servicio de otro proyecto, puede filtrar por ese proyecto en vez del que se quiere ejecutar. `--proyecto <nombre>` fuerza el filtro exacto; `--epica <KEY-ENN>` (opcional, id prefijado ej. `PLAT-E25`) fija el loop a esa épica puntual con precedencia sobre cualquier otra en-progreso — la skill valida existencia, proyecto y `depende_de:` antes de ejecutar (§0 de la skill); `--roadmap <path>` fuerza el archivo (rara vez necesario, hay uno solo) |
 
 ## Prerequisite validation
 

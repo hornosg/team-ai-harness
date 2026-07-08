@@ -108,10 +108,18 @@ Trigger: propuesta aprobada por el owner.
      hito: H[N]
      estado: pendiente
      prioridad: [nivel]
+     depende_de: [KEY-ENN, ...]   # opcional — ids PREFIJADOS de épicas que deben estar `estado: completo` antes
      archivo: <scope-dir>/epicas/ENN-[nombre].md   # ej. "platform/epicas/..." o "projects/mercado-cercano/epicas/..."
      servicios: [lista]
      descripcion: "[una oración]"
    ```
+
+   **`depende_de:` es la fuente verificable por máquina del orden de ejecución** (la consume
+   `loop-next-task` §1ter para decidir elegibilidad). El árbol narrativo en comentarios YAML
+   es solo documentación y NO gobierna nada — probó driftear. Reglas:
+   - Ids siempre prefijados (`PLAT-E24`, `MC-E05`) aunque la dependencia sea del mismo proyecto.
+   - Omitir el campo = épica desbloqueada (no escribir `depende_de: []`).
+   - Al agregar/cambiar orden de ejecución, actualizar el campo — no solo el comentario.
 
 ## Cómo actualizar estado
 
