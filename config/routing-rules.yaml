@@ -269,8 +269,26 @@ loop_mode:
     - "Verifica el archivo en disco con Read/ls antes de reportar la escalación como cerrada —
        un Write narrado en texto no es evidencia de que se ejecutó (gap real del piloto E24,
        2026-07-03: ninguna iteración lo escribió en tiempo real; ver loop-next-task §2)."
-    - "NO commitea sin sign-off explícito del owner, sin excepción."
+    - "NO commitea/pushea código sin sign-off explícito del owner, sin excepción."
     - "El loop continúa con la próxima tarea sin dependencias pendientes en la iteración siguiente."
+  # lab-postgres/lab-redis/lab-kong (columna "Dev local" de platform-architecture.md §7) NO son
+  # producción — el gate de arriba (NO commitea/pushea) es sobre CÓDIGO, no sobre DDL local.
+  # Origen: PLAT-E25 T3 (2026-07-09) escaló CREATE ROLE contra lab-postgres como si fuera
+  # producción, inconsistente con el precedente de PLAT-E24 T3 (creó ledger_app sin escalar).
+  # Detalle completo y la contrapartida (migración versionada obligatoria, nunca SQL ad-hoc):
+  # ver management/rules/platform-architecture.md §7 "Guardrail de ejecución (loop)".
+  local_infra_ddl_policy:
+    scope: "lab-postgres, lab-redis, lab-kong y demás infra bajo docker-compose (Dev local)"
+    rule: "DDL contra esta infra (CREATE ROLE, ALTER, aplicar migraciones, habilitar RLS) NO
+           requiere escalar a sign-off del owner — no es producción, es local y reversible
+           (pg_dump antes de tocar datos reales de desarrollo)."
+    does_not_apply_to: "producción real (k3s DigitalOcean, cuando exista — fases H2 E12-E18).
+                         Contra esa base el guardrail de sign-off sigue vigente sin cambios."
+    counterpart_required: "el DDL debe existir primero como artefacto versionado checked-in
+                            (migración NNN_*.up/down.sql, convención ADR-001 de go-shared, o
+                            script equivalente) — nunca un comando SQL ad-hoc sin archivo. El
+                            archivo se aplica local sin sign-off pero queda sin commitear hasta
+                            que el owner apruebe, igual que cualquier otro cambio L4."
   # Autoría de épica sin `archivo:` — cuenta como el trabajo de la iteración, no como corte
   # (loop-next-task §1bis, 2026-07-04). El gate de revisión antes de ejecutar T1 de un plan
   # recién escrito aplica si: ceremony L3/L4, sin precedente (ninguna épica hermana completa

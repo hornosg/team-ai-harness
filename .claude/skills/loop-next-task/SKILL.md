@@ -169,8 +169,20 @@ prefijados de épicas (ej. `[PLAT-E24]`) que deben estar `estado: completo` ante
 - **L3**: requiere `@dev-architect` en el diseño si la tarea lo dice explícitamente; si no,
   ejecutar directo pero dejar registrado en el handoff que fue L3.
 - **L4**: ver `config/routing-rules.yaml → loop_mode` — regla "L4 nunca desatendido". La
-  iteración implementa hasta el gate (build/test verdes) y **NO commitea sin sign-off**. La
-  escalación **no es un paso narrado en el handoff — es un gate mecánico** previo a cerrar la
+  iteración implementa hasta el gate (build/test verdes) y **NO commitea/pushea código sin
+  sign-off**. Ese gate es sobre CÓDIGO (`git commit`/`git push` en el repo del servicio) — **no**
+  sobre DDL contra infra local del lab. `lab-postgres`/`lab-redis`/`lab-kong` (columna "Dev
+  local" de `platform-architecture.md` §7) **no son producción**: `CREATE ROLE`, `ALTER`,
+  aplicar migraciones o habilitar RLS contra ellos se ejecuta directo en la misma iteración, sin
+  escalar, siempre que el DDL exista primero como artefacto versionado (migración
+  `NNN_*.up/down.sql` u otro script checked-in — nunca SQL ad-hoc sin archivo; ver
+  `config/routing-rules.yaml → loop_mode.local_infra_ddl_policy` y `platform-architecture.md §7`
+  para el detalle y el porqué — origen: PLAT-E25 T3, 2026-07-09, escaló esto por error). El
+  archivo creado queda sin commitear (como cualquier cambio L4) hasta sign-off del owner; lo que
+  NO se frena es su aplicación contra la infra local. Esta regla NO aplica a producción real
+  (k3s, cuando exista) — ahí el mismo DDL sigue requiriendo sign-off explícito.
+
+  La escalación **no es un paso narrado en el handoff — es un gate mecánico** previo a cerrar la
   iteración (§5), con verificación obligatoria en este orden:
   1. Escribir `management/escalations/YYYY-MM-DD_<slug-tarea>.md` con el tool `Write`. No
      alcanza con describir el contenido de la escalación en el texto de la respuesta.
