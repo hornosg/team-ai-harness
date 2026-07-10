@@ -40,6 +40,12 @@
 # supersede la mitigación original de PROP-008 de nunca usarlo sobre $HOME). Riesgo
 # asumido explícitamente por el owner. El kill-switch (.loop-stop) es el freno manual
 # principal; el guardrail L4-nunca-commitea-sin-sign-off sigue vigente e independiente.
+#
+# Cuota de sesión agotada (owner, 2026-07-10): cuando `claude -p` devuelve el bloqueo de
+# Claude Code "You've hit your session limit · resets H:MMam/pm (TZ)", el runner NO lo trata
+# como fallo/no-progreso — parsea el horario de reset, duerme (en tramos de 5min, chequeando
+# el kill-switch) hasta ese momento + 60s de margen, y reintenta la MISMA invocación sin
+# consumir cupo de --max-iterations ni sumar a la racha de no-progreso. Ver wait_for_quota_reset().
 
 set -euo pipefail
 
@@ -66,6 +72,59 @@ while [[ $# -gt 0 ]]; do
 done
 
 log() { printf '[loop-runner] %s\n' "$1"; }
+
+# Detecta el bloqueo de cuota de sesión de Claude Code en la salida de una invocación.
+# Formato observado: "You've hit your session limit · resets 1:20pm (America/Buenos_Aires)"
+is_quota_block() {
+  echo "$1" | grep -qiE "session limit.*resets"
+}
+
+# Duerme hasta el horario de reset reportado por Claude Code (+60s de margen), en tramos de
+# hasta 5min para poder atender el kill-switch durante la espera. Devuelve 1 si el kill-switch
+# se activó mientras esperaba (el loop debe cortar), 0 si terminó de esperar normalmente.
+wait_for_quota_reset() {
+  local block_text="$1"
+  local reset_raw tz today_str target_epoch now_epoch remaining chunk
+
+  reset_raw="$(echo "$block_text" | grep -oiE 'resets[[:space:]]+[0-9]{1,2}:[0-9]{2}[[:space:]]*(am|pm)' | head -1 | grep -oiE '[0-9]{1,2}:[0-9]{2}[[:space:]]*(am|pm)' | tr -d '[:space:]' | tr '[:lower:]' '[:upper:]')"
+  tz="$(echo "$block_text" | grep -oE '\([A-Za-z_]+/[A-Za-z_]+\)' | head -1 | tr -d '()')"
+  tz="${tz:-America/Buenos_Aires}"
+
+  if [[ -z "$reset_raw" ]]; then
+    log "cuota de sesión agotada pero no pude parsear el horario de reset → durmiendo 900s como fallback"
+    target_epoch=$(( $(date +%s) + 900 ))
+  else
+    today_str="$(TZ="$tz" date +%Y-%m-%d)"
+    target_epoch="$(TZ="$tz" date -j -f "%Y-%m-%d %I:%M%p" "$today_str $reset_raw" +%s 2>/dev/null || true)"
+    if [[ -z "$target_epoch" ]]; then
+      log "no pude interpretar '$reset_raw ($tz)' como horario → durmiendo 900s como fallback"
+      target_epoch=$(( $(date +%s) + 900 ))
+    else
+      now_epoch=$(date +%s)
+      if [[ "$target_epoch" -le "$now_epoch" ]]; then
+        target_epoch=$((target_epoch + 86400))  # el horario ya pasó hoy → es mañana
+      fi
+      target_epoch=$((target_epoch + 60))  # margen de seguridad
+      log "cuota de sesión agotada — reset ~$(TZ="$tz" date -r "$target_epoch" '+%H:%M %Z') ($tz). Durmiendo hasta entonces..."
+    fi
+  fi
+
+  while :; do
+    now_epoch=$(date +%s)
+    remaining=$((target_epoch - now_epoch))
+    if [[ "$remaining" -le 0 ]]; then
+      break
+    fi
+    if [[ -f "$KILL_SWITCH" ]]; then
+      log "kill-switch detectado durante la espera de cuota → cortando"
+      return 1
+    fi
+    chunk=$((remaining < 300 ? remaining : 300))
+    sleep "$chunk"
+  done
+  log "ventana de cuota reseteada, reanudando loop"
+  return 0
+}
 
 # Estado observable: hash combinado de roadmap.yaml + todos los archivos de épicas
 # (checkboxes [x]/[ ] y estado: en-progreso/completo viven ahí). Un cambio de hash
@@ -140,6 +199,15 @@ while true; do
 
   output="$(claude -p "$PROMPT" --max-turns "$MAX_TURNS" --dangerously-skip-permissions 2>&1 || true)"
   echo "$output"
+
+  if is_quota_block "$output"; then
+    iteration=$((iteration - 1))
+    invocations=$((invocations - 1))
+    if ! wait_for_quota_reset "$output"; then
+      break
+    fi
+    continue
+  fi
 
   if echo "$output" | grep -q "NEXT-TASK: empty"; then
     if [[ -n "$EPICA" ]]; then
