@@ -13,6 +13,7 @@
 # Uso:
 #   ./scripts/loop-runner.sh [--proyecto <nombre>] [--epica <KEY-ENN>]
 #                            [--roadmap path/a/roadmap.yaml]
+#                            [--provider anthropic|ollama] [--ollama-model <id>]
 #                            [--max-iterations N] [--dry-run]
 #
 # roadmap.yaml es ÚNICO y multi-proyecto desde 2026-07-02 (decisión del owner) — path por
@@ -36,6 +37,18 @@
 # reiterar una épica fijada que no puede avanzar no aporta nada). Origen: pedido del owner
 # 2026-07-08 — PLAT-E25 quedó huérfana porque la selección global nunca la elegía.
 #
+# --provider (opcional, default anthropic) elige el backing del loop SIN perder el modo original:
+#   - anthropic (default): invoca `claude -p ...` contra el backend Anthropic nativo — comportamiento
+#     histórico, intacto.
+#   - ollama: invoca `ollama launch claude --model <OLLAMA_MODEL> -- -p ...`, que lanza Claude Code
+#     apuntando al endpoint de Ollama con un modelo abierto (default kimi-k2.7-code:cloud). No consume
+#     cupo Anthropic. --ollama-model overridea el modelo (ej. kimi-k2.6:cloud). Impacto de calidad/
+#     ceremonia del backing global kimi (artefactos 'reforzado', L4 nunca auto-aprueba): ver la skill
+#     provider-selector, sección "Excepción — fallback kimi".
+#     NOTA: la espera por cuota (wait_for_quota_reset) es específica del bloqueo de Anthropic; bajo
+#     ollama no aplica y un rate-limit de kimi-cloud hoy se contaría como no-progreso. Manejo dedicado
+#     pendiente hasta tener un ejemplo del formato de error que devuelve kimi-cloud.
+#
 # Permisos: corre con --dangerously-skip-permissions (override del owner, 2026-07-02 —
 # supersede la mitigación original de PROP-008 de nunca usarlo sobre $HOME). Riesgo
 # asumido explícitamente por el owner. El kill-switch (.loop-stop) es el freno manual
@@ -46,6 +59,11 @@
 # como fallo/no-progreso — parsea el horario de reset, duerme (en tramos de 5min, chequeando
 # el kill-switch) hasta ese momento + 60s de margen, y reintenta la MISMA invocación sin
 # consumir cupo de --max-iterations ni sumar a la racha de no-progreso. Ver wait_for_quota_reset().
+#
+# Créditos de uso agotados (2026-07-20): distinto del session-limit — "You're out of usage
+# credits. Run /usage-credits …" NO trae hora de reset (hay que recargar o cambiar de modelo),
+# así que dormir no aplica. El runner corta LIMPIO (is_credits_exhausted → break), sin sumar a la
+# racha de no-progreso (antes lo hacía y cortaba con el mensaje engañoso "sin cambios en roadmap").
 
 set -euo pipefail
 
@@ -53,6 +71,8 @@ ROOT="$(pwd)"
 ROADMAP_GLOB="${DEVY_ROADMAP_PATH:-$HOME/Projects/management/roadmap.yaml}"
 PROYECTO=""        # vacío = dejar que @meta-router infiera el proyecto del cwd (ver --proyecto)
 EPICA=""           # vacío = selección automática de épica; ver --epica arriba
+PROVIDER="anthropic"                  # backing del loop: anthropic (default) | ollama
+OLLAMA_MODEL="kimi-k2.7-code:cloud"   # modelo cuando --provider ollama (--ollama-model lo overridea)
 MAX_ITERATIONS=0   # 0 = sin límite duro; el freno real es no_progress_threshold
 MAX_TURNS=40
 NO_PROGRESS_THRESHOLD=2
@@ -64,6 +84,8 @@ while [[ $# -gt 0 ]]; do
     --roadmap) ROADMAP_GLOB="$2"; shift 2 ;;
     --proyecto) PROYECTO="$2"; shift 2 ;;
     --epica) EPICA="$2"; shift 2 ;;
+    --provider) PROVIDER="$2"; shift 2 ;;
+    --ollama-model) OLLAMA_MODEL="$2"; shift 2 ;;
     --max-iterations) MAX_ITERATIONS="$2"; shift 2 ;;
     --max-turns) MAX_TURNS="$2"; shift 2 ;;
     --dry-run) DRY_RUN=true; shift ;;
@@ -71,12 +93,29 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# --provider solo acepta anthropic|ollama; y si es ollama, el binario debe existir antes de iterar.
+case "$PROVIDER" in
+  anthropic|ollama) ;;
+  *) echo "Provider desconocido: '$PROVIDER' (usar anthropic|ollama)" >&2; exit 1 ;;
+esac
+if [[ "$PROVIDER" == "ollama" ]] && ! command -v ollama >/dev/null 2>&1; then
+  echo "--provider ollama pero 'ollama' no está en el PATH" >&2; exit 1
+fi
+
 log() { printf '[loop-runner] %s\n' "$1"; }
 
 # Detecta el bloqueo de cuota de sesión de Claude Code en la salida de una invocación.
 # Formato observado: "You've hit your session limit · resets 1:20pm (America/Buenos_Aires)"
 is_quota_block() {
   echo "$1" | grep -qiE "session limit.*resets"
+}
+
+# Detecta agotamiento de CRÉDITOS de uso — condición DISTINTA del session-limit: NO trae hora de
+# reset, así que dormir no sirve (hay que recargar créditos o cambiar de modelo). Formato observado
+# 2026-07-20: "You're out of usage credits. Run /usage-credits to keep using <modelo> or /model to
+# switch models." El loop la trata como terminal (corta limpio), no como no-progreso.
+is_credits_exhausted() {
+  echo "$1" | grep -qiE "out of usage credits"
 }
 
 # Duerme hasta el horario de reset reportado por Claude Code (+60s de margen), en tramos de
@@ -154,7 +193,12 @@ state_hash() {
 }
 
 if [[ "$DRY_RUN" == true ]]; then
-  log "DRY RUN — no se ejecuta claude -p, solo se valida el driver"
+  log "DRY RUN — no se ejecuta la invocación real, solo se valida el driver"
+  if [[ "$PROVIDER" == "ollama" ]]; then
+    log "provider=ollama — invocaría: ollama launch claude --model $OLLAMA_MODEL -- -p <PROMPT> --max-turns $MAX_TURNS --dangerously-skip-permissions"
+  else
+    log "provider=anthropic — invocaría: claude -p <PROMPT> --max-turns $MAX_TURNS --dangerously-skip-permissions"
+  fi
   if [[ -f "$KILL_SWITCH" ]]; then
     log "kill-switch .loop-stop presente → 0 iteraciones"
     exit 0
@@ -195,10 +239,26 @@ while true; do
   if [[ -n "$EPICA" ]]; then
     PROMPT="$PROMPT --epica $EPICA"
   fi
-  log "iteración $iteration — invocando '$PROMPT' (contexto fresco, --max-turns $MAX_TURNS)"
+  log "iteración $iteration — invocando '$PROMPT' (provider=$PROVIDER, contexto fresco, --max-turns $MAX_TURNS)"
 
-  output="$(claude -p "$PROMPT" --max-turns "$MAX_TURNS" --dangerously-skip-permissions 2>&1 || true)"
+  # Misma tarea, distinto backing. anthropic = comportamiento histórico (claude -p directo).
+  # ollama = Claude Code lanzado por `ollama launch` apuntando al endpoint de Ollama; el `-p` viaja
+  # como arg extra tras `--`, así que corre igual de headless y su stdout se captura igual.
+  if [[ "$PROVIDER" == "ollama" ]]; then
+    output="$(ollama launch claude --model "$OLLAMA_MODEL" -- -p "$PROMPT" --max-turns "$MAX_TURNS" --dangerously-skip-permissions 2>&1 || true)"
+  else
+    output="$(claude -p "$PROMPT" --max-turns "$MAX_TURNS" --dangerously-skip-permissions 2>&1 || true)"
+  fi
   echo "$output"
+
+  # Créditos agotados: TERMINAL. A diferencia del session-limit no hay reset horario que esperar →
+  # cortar limpio, sin dormir y sin sumar a la racha de no-progreso (que cortaría igual pero con un
+  # mensaje engañoso de "sin cambios"). El owner recarga con /usage-credits o cambia de modelo con
+  # /model y relanza el loop. Se chequea ANTES que is_quota_block (mensajes mutuamente excluyentes).
+  if is_credits_exhausted "$output"; then
+    log "créditos de uso agotados (sin reset horario) → deteniendo. Recargá con /usage-credits o cambiá de modelo con /model, y relanzá el loop."
+    break
+  fi
 
   if is_quota_block "$output"; then
     iteration=$((iteration - 1))
