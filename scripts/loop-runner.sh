@@ -13,7 +13,7 @@
 # Uso:
 #   ./scripts/loop-runner.sh [--proyecto <nombre>] [--epica <KEY-ENN>]
 #                            [--roadmap path/a/roadmap.yaml]
-#                            [--provider anthropic|ollama] [--ollama-model <id>]
+#                            [--provider anthropic|ollama] [--model <alias>] [--ollama-model <id>]
 #                            [--max-iterations N] [--dry-run]
 #
 # roadmap.yaml es ÚNICO y multi-proyecto desde 2026-07-02 (decisión del owner) — path por
@@ -49,6 +49,12 @@
 #     ollama no aplica y un rate-limit de kimi-cloud hoy se contaría como no-progreso. Manejo dedicado
 #     pendiente hasta tener un ejemplo del formato de error que devuelve kimi-cloud.
 #
+# --model (opcional, solo provider anthropic) fija el modelo del `claude -p` de cada iteración —
+#   alias `opus`/`sonnet`/`haiku`/`fable` o nombre completo (`claude-sonnet-5`). SIN --model
+#   (default) corre con el modelo de la config, comportamiento histórico intacto. Útil para correr
+#   el loop en un modelo/pool distinto (ej. cuando el default se quedó "out of usage credits").
+#   Para el provider ollama el modelo lo fija --ollama-model, no --model.
+#
 # Permisos: corre con --dangerously-skip-permissions (override del owner, 2026-07-02 —
 # supersede la mitigación original de PROP-008 de nunca usarlo sobre $HOME). Riesgo
 # asumido explícitamente por el owner. El kill-switch (.loop-stop) es el freno manual
@@ -72,6 +78,7 @@ ROADMAP_GLOB="${DEVY_ROADMAP_PATH:-$HOME/Projects/management/roadmap.yaml}"
 PROYECTO=""        # vacío = dejar que @meta-router infiera el proyecto del cwd (ver --proyecto)
 EPICA=""           # vacío = selección automática de épica; ver --epica arriba
 PROVIDER="anthropic"                  # backing del loop: anthropic (default) | ollama
+MODEL=""                              # --model del CLI (solo anthropic): vacío = modelo default de la config
 OLLAMA_MODEL="kimi-k2.7-code:cloud"   # modelo cuando --provider ollama (--ollama-model lo overridea)
 MAX_ITERATIONS=0   # 0 = sin límite duro; el freno real es no_progress_threshold
 MAX_TURNS=40
@@ -85,6 +92,7 @@ while [[ $# -gt 0 ]]; do
     --proyecto) PROYECTO="$2"; shift 2 ;;
     --epica) EPICA="$2"; shift 2 ;;
     --provider) PROVIDER="$2"; shift 2 ;;
+    --model) MODEL="$2"; shift 2 ;;
     --ollama-model) OLLAMA_MODEL="$2"; shift 2 ;;
     --max-iterations) MAX_ITERATIONS="$2"; shift 2 ;;
     --max-turns) MAX_TURNS="$2"; shift 2 ;;
@@ -197,7 +205,7 @@ if [[ "$DRY_RUN" == true ]]; then
   if [[ "$PROVIDER" == "ollama" ]]; then
     log "provider=ollama — invocaría: ollama launch claude --model $OLLAMA_MODEL -- -p <PROMPT> --max-turns $MAX_TURNS --dangerously-skip-permissions"
   else
-    log "provider=anthropic — invocaría: claude -p <PROMPT> --max-turns $MAX_TURNS --dangerously-skip-permissions"
+    log "provider=anthropic — invocaría: claude -p <PROMPT>${MODEL:+ --model $MODEL} --max-turns $MAX_TURNS --dangerously-skip-permissions"
   fi
   if [[ -f "$KILL_SWITCH" ]]; then
     log "kill-switch .loop-stop presente → 0 iteraciones"
@@ -246,6 +254,10 @@ while true; do
   # como arg extra tras `--`, así que corre igual de headless y su stdout se captura igual.
   if [[ "$PROVIDER" == "ollama" ]]; then
     output="$(ollama launch claude --model "$OLLAMA_MODEL" -- -p "$PROMPT" --max-turns "$MAX_TURNS" --dangerously-skip-permissions 2>&1 || true)"
+  elif [[ -n "$MODEL" ]]; then
+    # --model fijado: comportamiento anthropic con modelo explícito (rama aparte para no romper
+    # en bash 3.2 con set -u, donde un array vacío interpolado tira "unbound variable").
+    output="$(claude -p "$PROMPT" --model "$MODEL" --max-turns "$MAX_TURNS" --dangerously-skip-permissions 2>&1 || true)"
   else
     output="$(claude -p "$PROMPT" --max-turns "$MAX_TURNS" --dangerously-skip-permissions 2>&1 || true)"
   fi
