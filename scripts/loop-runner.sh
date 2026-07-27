@@ -119,6 +119,11 @@ REVIEW_MAX_TURNS=25             # revisar es leer y dictaminar, no implementar
 # dejando el veredicto escrito. Ver también §D.5 de la skill ("nunca esperar input en headless").
 INTERACTIVE_SIGNOFF=false
 SIGNOFF_TIMEOUT=600             # segundos; vencido, se trata como "no aprobado" y corta
+# Remediación de un veredicto `bloqueante`: el agente que escribió el plan resuelve las objeciones
+# y @dev-security re-revisa. Tope BAJO a propósito — si dos revisiones seguidas siguen bloqueando,
+# el problema es de diseño y lo tiene que mirar una persona, no otra vuelta del ciclo.
+REMEDIATE_AGENT="dev-architect"  # quien corrige el plan (necesita Write; dev-security es read-only)
+REMEDIATE_CYCLES=1               # 0 = desactivado: bloqueante corta de una
 NO_PROGRESS_THRESHOLD=2
 # Terminaciones anormales consecutivas (max-turns o salida sin marcador NEXT-TASK) antes de cortar.
 # Más bajo que NO_PROGRESS_THRESHOLD a propósito: una anormal cuesta el presupuesto completo de
@@ -149,6 +154,8 @@ while [[ $# -gt 0 ]]; do
     --no-security-review) SECURITY_AGENT=""; shift ;;
     --interactive-signoff) INTERACTIVE_SIGNOFF=true; shift ;;
     --signoff-timeout) SIGNOFF_TIMEOUT="$2"; shift 2 ;;
+    --remediate-agent) REMEDIATE_AGENT="$2"; shift 2 ;;
+    --remediate-cycles) REMEDIATE_CYCLES="$2"; shift 2 ;;
     --dry-run) DRY_RUN=true; shift ;;
     *) echo "Argumento desconocido: $1" >&2; exit 1 ;;
   esac
@@ -350,16 +357,70 @@ run_l4_gate() {
   prompt="$prompt Terminá SIEMPRE con la línea 'SECURITY-REVIEW: ok|objeciones|bloqueante <resumen>'"
   prompt="$prompt donde 'bloqueante' significa que NO debe aprobarse como está."
 
-  log "iteración $iteration — fase REVIEW L4 de $epica.$tarea con @$SECURITY_AGENT (--max-turns $REVIEW_MAX_TURNS)"
-  review_output="$(dispatch_agent "$SECURITY_AGENT" "$prompt" "$REVIEW_MAX_TURNS")"
-  echo "$review_output"
-  review_verdict="$(echo "$review_output" | grep -oE "SECURITY-REVIEW: (ok|objeciones|bloqueante)[^\\\\\"]*" | tail -1 || true)"
-  [[ -z "$review_verdict" ]] && review_verdict="SECURITY-REVIEW: <sin veredicto — la revisión no cerró>"
+  local cycle=0 first_verdict="" remediation_trail=""
+  while :; do
+    log "iteración $iteration — fase REVIEW L4 de $epica.$tarea con @$SECURITY_AGENT (ciclo $((cycle + 1)), --max-turns $REVIEW_MAX_TURNS)"
+    review_output="$(dispatch_agent "$SECURITY_AGENT" "$prompt" "$REVIEW_MAX_TURNS")"
+    echo "$review_output"
+    review_verdict="$(echo "$review_output" | grep -oE "SECURITY-REVIEW: (ok|objeciones|bloqueante)[^\\\\\"]*" | tail -1 || true)"
+    [[ -z "$review_verdict" ]] && review_verdict="SECURITY-REVIEW: <sin veredicto — la revisión no cerró>"
+    [[ -z "$first_verdict" ]] && first_verdict="$review_verdict"
 
-  if echo "$review_verdict" | grep -q "bloqueante"; then
-    log "⚠ @$SECURITY_AGENT marcó BLOQUEANTE — no se ofrece sign-off"
-    write_signoff "NO APROBADO (bloqueante de seguridad)" "$epica" "$tarea" "$review_verdict" "$review_output" || true
-    return 1
+    echo "$review_verdict" | grep -q "bloqueante" || break
+
+    if [[ "$cycle" -ge "$REMEDIATE_CYCLES" ]]; then
+      log "⚠ @$SECURITY_AGENT marcó BLOQUEANTE y se agotaron los ciclos de remediación ($REMEDIATE_CYCLES)"
+      log "  → no se ofrece sign-off. Las objeciones quedan registradas para resolverlas a mano."
+      write_signoff "NO APROBADO (bloqueante de seguridad)" "$epica" "$tarea" "$review_verdict" \
+        "$review_output$remediation_trail" || true
+      return 1
+    fi
+
+    # ---------------------------------------------------------------------------------------
+    # FASE REMEDIATE — aplicar las objeciones AL PLAN, no al criterio del revisor.
+    #
+    # El riesgo obvio de que el mismo loop corrija lo que otro agente objetó es que el corrector
+    # "satisfaga al revisor" en la letra: reescribir el texto para que la objeción no aplique, sin
+    # resolver el problema. Tres cosas lo acotan: el prompt lo prohíbe explícitamente, la
+    # re-revisión parte de las objeciones originales (no de cero), y el sign-off del owner sigue
+    # siendo obligatorio al final. La remediación NO puede aprobar nada por sí sola.
+    # ---------------------------------------------------------------------------------------
+    cycle=$((cycle + 1))
+    log "iteración $iteration — fase REMEDIATE (ciclo $cycle/$REMEDIATE_CYCLES) con @$REMEDIATE_AGENT"
+    local rem_prompt="@$SECURITY_AGENT bloqueó el gate L4 de $epica. $scope_prompt"
+    rem_prompt="$rem_prompt Tu tarea es RESOLVER sus objeciones bloqueantes EN EL PLAN de la épica."
+    rem_prompt="$rem_prompt Reglas, no negociables:"
+    rem_prompt="$rem_prompt (1) Corregí el PROBLEMA, no la redacción — está PROHIBIDO reescribir el"
+    rem_prompt="$rem_prompt texto para que la objeción deje de aplicar sin resolver el fondo."
+    rem_prompt="$rem_prompt (2) Si creés que una objeción es incorrecta, NO la apliques: dejá escrito"
+    rem_prompt="$rem_prompt en el plan por qué, con evidencia. Discrepar con argumento es válido; ignorar no."
+    rem_prompt="$rem_prompt (3) Sólo tocás el archivo de la épica y sus decisiones de diseño."
+    rem_prompt="$rem_prompt NO ejecutes ninguna tarea, NO marqués ningún [x], NO commitees código."
+    rem_prompt="$rem_prompt (4) Al final, listá objeción por objeción qué hiciste."
+    rem_prompt="$rem_prompt Terminá con 'NEXT-TASK: checkpoint $epica — objeciones L4 remediadas'."
+    rem_prompt="$rem_prompt --- REVISIÓN A RESOLVER ---"$'\n'"$review_output"
+    local rem_output
+    rem_output="$(dispatch_agent "$REMEDIATE_AGENT" "$rem_prompt" "$MAX_TURNS")"
+    echo "$rem_output"
+    remediation_trail="$remediation_trail"$'\n\n---\n\n'"## Remediación (ciclo $cycle, @$REMEDIATE_AGENT)"$'\n\n'"$rem_output"
+
+    # La re-revisión arranca de las objeciones originales a propósito: preguntar "¿está bien?"
+    # sobre un plan corregido invita a mirar sólo lo que cambió. Lo que importa es si el problema
+    # que motivó cada objeción sigue existiendo.
+    prompt="RE-REVISIÓN del gate L4 de $epica. $scope_prompt"
+    prompt="$prompt @$REMEDIATE_AGENT acaba de modificar el plan para atender TUS objeciones previas."
+    prompt="$prompt Verificá, objeción por objeción, si el PROBLEMA DE FONDO quedó resuelto — no si"
+    prompt="$prompt el texto cambió. Una objeción 'resuelta' reescribiendo el enunciado para que deje"
+    prompt="$prompt de aplicar NO está resuelta: marcala bloqueante de nuevo y decilo explícitamente."
+    prompt="$prompt Si el plan argumenta por qué una objeción tuya no corresponde, evaluá el argumento."
+    prompt="$prompt Seguís siendo read-only. Aplicá owasp-top10."
+    prompt="$prompt Terminá con 'SECURITY-REVIEW: ok|objeciones|bloqueante <resumen>'."
+    prompt="$prompt --- TUS OBJECIONES ORIGINALES ---"$'\n'"$review_output"
+  done
+
+  if [[ "$cycle" -gt 0 ]]; then
+    log "✓ gate destrabado tras $cycle ciclo(s) de remediación — veredicto inicial: ${first_verdict:0:60}…"
+    review_output="$review_output$remediation_trail"
   fi
 
   if [[ "$INTERACTIVE_SIGNOFF" != true || ! -t 0 ]]; then

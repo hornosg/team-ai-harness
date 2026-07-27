@@ -73,10 +73,21 @@ así que **cada fase corre con el modelo declarado en el frontmatter de su agent
 RULE-10 siempre exigió `@dev-security` en L4, pero hasta 2026-07-27 eso dependía de que el agente
 ejecutor se acordara de invocarlo. Cableada como fase del runner, la revisión **ocurre**.
 
-Después de REVIEW viene el sign-off del owner, que el runner ofrece por consola sólo con
+La revisión se dispara por **dos** caminos: después de EXEC sobre trabajo recién hecho, y cuando
+SELECT reporta `blocked` por un gate L4 que quedó pendiente de una iteración anterior. Sin el
+segundo hay deadlock — el gate espera la revisión y la revisión espera que el gate deje pasar.
+
+Ante un veredicto `bloqueante`, el runner despacha **REMEDIATE** (`@dev-architect`): resolver las
+objeciones **en el plan**, con la prohibición explícita de corregir la redacción en vez del
+problema, y con la salida honesta de discrepar por escrito y con evidencia. Después, `@dev-security`
+**re-revisa partiendo de sus objeciones originales** — no del plan corregido, porque preguntar
+"¿está bien ahora?" invita a mirar sólo lo que cambió. Un ciclo por corrida: si dos revisiones
+seguidas bloquean, es un problema de diseño y lo mira una persona.
+
+Después viene el sign-off del owner, que el runner ofrece por consola sólo con
 `--interactive-signoff` **y** TTY. Sin terminal no se pregunta nada: se registra el veredicto y el
 loop sigue su curso normal (nunca esperar input en headless — `reference/casos-borde.md` §D.5).
-Un `bloqueante` no ofrece sign-off: corta.
+**La remediación no aprueba nada por sí sola**: sólo habilita que se te pregunte.
 
 Toda decisión — aprobada, denegada o pendiente — se escribe en
 `management/escalations/YYYY-MM-DD_<epica>-<tarea>-signoff.md` con el veredicto de seguridad

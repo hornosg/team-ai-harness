@@ -40,6 +40,8 @@ Desde 2026-07-27 cada iteración son **dos invocaciones** (`SELECT` → `EXEC`) 
 | `--no-security-review` | — | Desactiva la fase REVIEW. **No usar en L4 real**: RULE-10 la exige. |
 | `--interactive-signoff` | desactivado | Tras REVIEW, pregunta `¿Aprobás? [s/N]` por consola. **Sólo con TTY**: sin terminal se registra el veredicto y sigue, nunca cuelga. |
 | `--signoff-timeout N` | `600` | Segundos de espera de esa respuesta. Vencido = NO aprobado. |
+| `--remediate-agent <a>` | `dev-architect` | Quien corrige el plan tras un veredicto `bloqueante`. Necesita `Write` (`dev-security` es read-only). |
+| `--remediate-cycles N` | `1` | Ciclos de remediación + re-revisión antes de rendirse. `0` desactiva: `bloqueante` corta de una. |
 | `--exec-agent <a>` | `dev-senior-backend` | Fallback de EXEC cuando SELECT no designa un agente válido. |
 | `--max-iterations N` | `0` (sin límite duro) | Tope de iteraciones. El freno real es la racha de no-progreso. |
 | `--max-turns N` | `40` | Presupuesto de turnos de la fase EXEC. SELECT usa 15 fijo (sólo lee y decide). |
@@ -102,14 +104,41 @@ Reglas del prompt, todas verificadas:
 | `n`, enter vacío, cualquier otra cosa | NO APROBADO — se registra y corta |
 | Timeout o EOF | NO APROBADO — ante la duda, en L4 no se avanza |
 | **Sin TTY** (cron, `nohup`, background) | **No pregunta**: registra `PENDIENTE` y sigue el flujo normal |
-| Veredicto `bloqueante` | No se ofrece sign-off — corta directamente |
+| Veredicto `bloqueante` | Dispara REMEDIATE (ver abajo); si tras el ciclo sigue bloqueante, corta sin ofrecer sign-off |
 
 Lo de "sin TTY" no es un detalle: un `read` sin terminal cuelga el proceso **para siempre**, que es
 el peor modo de fallo posible para un runner autónomo. Por eso el prompt es opt-in y condicionado.
 
 Toda decisión se escribe en `management/escalations/AAAA-MM-DD_<épica>-<tarea>-signoff.md` con el
-veredicto de seguridad completo. **El sign-off no es un keystroke: es un archivo.** Sin rastro de
-qué se aprobó y con qué análisis, el gate L4 se degrada a un trámite.
+veredicto de seguridad completo, incluido el rastro de las remediaciones. **El sign-off no es un
+keystroke: es un archivo.** Sin rastro de qué se aprobó y con qué análisis, el gate L4 se degrada
+a un trámite.
+
+### Fase REMEDIATE — qué pasa tras un `bloqueante`
+
+```
+REVIEW (@dev-security)  → bloqueante
+REMEDIATE (@dev-architect) → resuelve las objeciones EN EL PLAN
+RE-REVIEW (@dev-security)  → ¿el problema de fondo quedó resuelto?
+   ├─ ok | objeciones → sign-off del owner
+   └─ bloqueante otra vez → corta, sin ofrecer sign-off
+```
+
+El riesgo evidente de que el mismo loop corrija lo que otro agente objetó es que el corrector
+**satisfaga al revisor en la letra**: reescribir el enunciado para que la objeción deje de aplicar,
+sin resolver nada. Tres cosas lo acotan:
+
+1. El prompt de REMEDIATE lo prohíbe explícitamente, y habilita la salida honesta: si el agente
+   cree que una objeción es incorrecta, debe **dejar escrito por qué con evidencia**, no ignorarla.
+   Discrepar con argumento es válido.
+2. La re-revisión **parte de las objeciones originales**, no del plan corregido. Preguntar "¿está
+   bien ahora?" invita a mirar sólo lo que cambió; lo que importa es si el problema sigue ahí. El
+   prompt le pide explícitamente marcar como bloqueante toda objeción "resuelta" por redacción.
+3. **El sign-off del owner sigue siendo obligatorio.** La remediación no puede aprobar nada por sí
+   sola — sólo habilita que se te pregunte.
+
+El tope por defecto es **un** ciclo, a propósito: si dos revisiones seguidas siguen bloqueando, el
+problema es de diseño y lo tiene que mirar una persona.
 
 Comportamiento de borde:
 
