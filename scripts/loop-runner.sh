@@ -808,7 +808,7 @@ while true; do
   # Reset explícito: bash conserva estas variables entre vueltas del while, y una iteración que
   # no despacha EXEC heredaría el output de la anterior en el log de traza.
   select_output=""; exec_output=""; sel_agente=""; sel_epica=""; sel_tarea=""
-  sel_ceremony=""; sel_proyecto=""; select_line=""; review_output=""; review_verdict=""
+  sel_ceremony=""; sel_proyecto=""; select_line=""; review_output=""; review_verdict=""; review_skip_reason=""
   # Foto del estado git ANTES de trabajar, para poder atribuirle a esta iteración sólo lo que
   # ensució ella y no lo que ya venía sucio de otras sesiones.
   dirty_before="$(dirty_snapshot)"
@@ -903,8 +903,30 @@ while true; do
         #
         # No corre si EXEC salió `blocked`: no hay nada que revisar todavía.
         # -----------------------------------------------------------------------------------
-        if [[ "$sel_ceremony" == "L4" && -n "$SECURITY_AGENT" ]] \
-           && ! echo "$exec_output" | grep -q "NEXT-TASK: blocked"; then
+        # El gate de commit revisa lo que EXEC dejó — así que sólo tiene sentido si EXEC TERMINÓ.
+        #
+        # Antes la condición sólo excluía `blocked`, y una muerte por `--max-turns` disparaba la
+        # revisión igual. Observado en PLAT-E39.T1 (2026-07-27): EXEC agotó los 40 turnos sin
+        # crear nada, y @dev-security gastó una invocación opus para ir a disco, verificar que
+        # `catalog-service` no existía y reportar el false-dispatch. Tenía razón — y el prompt le
+        # había afirmado como premisa que la tarea "se acababa de ejecutar".
+        #
+        # Nunca afirmarle a un agente que algo existe sin haberlo verificado: la revisión buena
+        # cuesta una invocación cara, y la mala fabrica un veredicto sobre nada.
+        review_skip_reason=""
+        if is_max_turns "$exec_output"; then
+          review_skip_reason="EXEC agotó el presupuesto de $MAX_TURNS turnos sin cerrar la tarea"
+        elif ! has_terminal_marker "$exec_output"; then
+          review_skip_reason="EXEC terminó sin marcador NEXT-TASK"
+        elif echo "$exec_output" | grep -q "NEXT-TASK: blocked"; then
+          review_skip_reason="EXEC reportó blocked"
+        fi
+
+        if [[ "$sel_ceremony" == "L4" && -n "$SECURITY_AGENT" && -n "$review_skip_reason" ]]; then
+          log "  gate de commit OMITIDO: $review_skip_reason → no hay nada que revisar"
+        fi
+
+        if [[ "$sel_ceremony" == "L4" && -n "$SECURITY_AGENT" && -z "$review_skip_reason" ]]; then
           if run_l4_gate "$sel_epica" "$sel_tarea" \
                "Lo acaba de ejecutar @$sel_agente en esta misma iteración. Revisá el DIFF sin commitear." \
                "commit"; then

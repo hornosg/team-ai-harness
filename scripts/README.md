@@ -133,6 +133,20 @@ commit. Cobrarlos al precio de un gate de plan agota la ventana de uso antes de 
 Sobre un diff, además, la remediación automática tiene menos sentido: un `bloqueante` ahí significa
 reescribir código, y eso vuelve por el loop normal como una tarea más, con su propio ciclo completo.
 
+### Cuándo NO corre el gate de commit
+
+Sólo tiene sentido revisar lo que EXEC dejó **si EXEC terminó**. Se omite cuando murió por
+`--max-turns`, cuando no emitió marcador, o cuando reportó `blocked` — en los tres casos no hay
+diff que auditar. Sí corre ante un `checkpoint`: ahí hay trabajo parcial en disco.
+
+Observado en PLAT-E39.T1 (2026-07-27): EXEC agotó los 40 turnos sin crear nada y la revisión corrió
+igual, gastando una invocación opus para ir a disco, comprobar que `catalog-service` no existía y
+reportar el false-dispatch. Tenía razón — y el prompt le había afirmado como premisa que la tarea
+"se acababa de ejecutar".
+
+> **Nunca afirmarle a un agente que algo existe sin haberlo verificado.** La revisión buena cuesta
+> una invocación cara; la mala fabrica un veredicto sobre nada.
+
 ### Si la revisión no cierra
 
 Una revisión que muere sin emitir `SECURITY-REVIEW:` **no ofrece sign-off**. Pedirte que apruebes
