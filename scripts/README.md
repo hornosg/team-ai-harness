@@ -216,8 +216,12 @@ El loop termina (limpio) cuando:
 
 - **`NEXT-TASK: empty`** — la épica/roadmap no tiene tareas ejecutables (backlog vacío). En modo
   `--epica` suele significar "épica completa salvo acción del owner" (ej. sign-off L4 pendiente).
-- **`NEXT-TASK: blocked`** (solo con `--epica`) — la épica está bloqueada (dependencia sin cumplir o
-  checkpoint); reiterar no la desbloquea → corta.
+- **`NEXT-TASK: blocked`** (solo con `--epica`) — la épica está bloqueada (dependencia sin cumplir);
+  reiterar no la desbloquea → corta.
+- **`NEXT-TASK: checkpoint` que espera a una persona** (solo con `--epica`) — causa
+  `plan-authored-pending-review` (plan L4 recién escrito, gate §B) o `escalation-write-failed`.
+  Lo destraba un sign-off, no otra iteración → corta. El checkpoint por **contexto agotado** NO
+  corta: ahí la próxima iteración retoma la misma tarea desde donde quedó.
 - **Racha de no-progreso** — 2 iteraciones consecutivas sin cambio del hash de estado
   (`NO_PROGRESS_THRESHOLD`) → corta.
 - **Racha de terminaciones anormales** — 2 seguidas (`ABNORMAL_THRESHOLD`) → corta. Es más bajo
@@ -230,7 +234,8 @@ El loop termina (limpio) cuando:
 ### Terminación anormal
 
 Una iteración es anormal cuando muere por `--max-turns` **o** cuando termina sin el marcador
-`NEXT-TASK:`. Nunca cuenta como progreso, **haya escrito o no en disco**.
+`NEXT-TASK:` (`done`, `empty`, `blocked` o `checkpoint` — los cuatro son cierres válidos). Nunca
+cuenta como progreso, **haya escrito o no en disco**.
 
 > Un cambio en disco no es evidencia de que la tarea se completó. El marcador sí.
 

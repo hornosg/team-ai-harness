@@ -354,20 +354,54 @@ is_max_turns() {
 # cerrar la tarea: murió por turnos, por error del CLI, o por un crash del agente.
 # Es la única señal confiable de "la iteración terminó lo que empezó".
 has_terminal_marker() {
-  echo "$1" | grep -qE "NEXT-TASK: (done|empty|blocked)"
+  # `checkpoint` es terminal igual que los otros tres: la iteración cerró lo que podía cerrar y
+  # lo dejó registrado. Omitirlo (bug hasta 2026-07-27) hacía que una iteración SANA se contara
+  # como muerte por turnos. Observado en PLAT-E39: la fase EXEC emitió
+  # `NEXT-TASK: checkpoint platform/PLAT-E39.DESIGN — plan-authored-pending-review` — el caso que
+  # la propia skill §B EXIGE para un plan L4 recién escrito — y el runner lo reportó como
+  # "terminó sin marcador NEXT-TASK", sumó a la racha anormal y avisó de trabajo a medias
+  # inexistente. El dispatcher ya lo clasificaba bien; el desalineado era este grep.
+  echo "$1" | grep -qE "NEXT-TASK: (done|empty|blocked|checkpoint)"
 }
 
-# ¿Quedaron cambios sin commitear en los repos que el loop puede tocar? Se usa sólo para AVISAR
-# tras una terminación anormal: un working tree sucio después de que el agente murió a mitad de
-# tarea es la señal de trabajo a medias que la próxima iteración va a heredar sin saberlo.
-dirty_repos() {
-  local r out=""
+# ¿El checkpoint requiere acción del OWNER, o es sólo una pausa de presupuesto?
+# La distinción importa con --epica fijada: reiterar no resuelve un gate de revisión ni una
+# escalación fallida (los destraba una persona), pero SÍ es lo correcto ante un checkpoint por
+# contexto agotado — ahí la próxima iteración retoma la misma tarea desde donde quedó.
+checkpoint_needs_owner() {
+  echo "$1" | grep -qE "NEXT-TASK: checkpoint.*(plan-authored-pending-review|escalation-write-failed)"
+}
+
+# ¿Qué repos ensució ESTA iteración? Se usa sólo para AVISAR tras una terminación anormal: un
+# working tree sucio después de que el agente murió a mitad de tarea es la señal de trabajo a
+# medias que la próxima iteración va a heredar sin saberlo.
+#
+# Compara contra un snapshot tomado ANTES de la iteración. Sin esa comparación el aviso listaba
+# todo repo con cambios sin commitear, viniera de donde viniera: en la corrida de PLAT-E39 nombró
+# 15 repos, todos sucios desde sesiones anteriores. Un aviso que siempre grita lo mismo no informa
+# nada — y peor, entrena a ignorarlo justo cuando dice algo real.
+repo_list() {
+  local r
   for r in "$LAB_ROOT/management" "$LAB_ROOT"/active/mercado-cercano/services/*/ "$LAB_ROOT/infra/api-gateway"; do
-    [[ -d "$r/.git" ]] || continue
-    if [[ -n "$(git -C "$r" status --porcelain 2>/dev/null)" ]]; then
-      out+="$(basename "$r") "
-    fi
+    [[ -d "$r/.git" ]] && printf '%s\n' "${r%/}"
   done
+}
+
+dirty_snapshot() {
+  local r
+  while IFS= read -r r; do
+    printf '%s\t%s\n' "$(basename "$r")" "$(git -C "$r" status --porcelain 2>/dev/null | md5sum | cut -d' ' -f1)"
+  done < <(repo_list)
+}
+
+# Repos cuyo estado CAMBIÓ respecto al snapshot recibido en $1.
+dirty_repos_since() {
+  local before="$1" now name hash prev out=""
+  now="$(dirty_snapshot)"
+  while IFS=$'\t' read -r name hash; do
+    prev="$(printf '%s' "$before" | awk -F'\t' -v n="$name" '$1==n{print $2}')"
+    [[ "$hash" != "$prev" ]] && out+="$name "
+  done <<< "$now"
   echo "$out"
 }
 
@@ -516,6 +550,9 @@ while true; do
   # no despacha EXEC heredaría el output de la anterior en el log de traza.
   select_output=""; exec_output=""; sel_agente=""; sel_epica=""; sel_tarea=""
   sel_ceremony=""; sel_proyecto=""; select_line=""
+  # Foto del estado git ANTES de trabajar, para poder atribuirle a esta iteración sólo lo que
+  # ensució ella y no lo que ya venía sucio de otras sesiones.
+  dirty_before="$(dirty_snapshot)"
 
   scope_prompt="Roadmap: $ROADMAP_GLOB."
   if [[ -n "$PROYECTO" ]]; then
@@ -655,6 +692,16 @@ while true; do
     break
   fi
 
+  # Mismo criterio para el checkpoint que espera a una persona. Sin esto el loop gasta una
+  # iteración completa para redescubrir que sigue frenado: en PLAT-E39, tras el checkpoint
+  # `plan-authored-pending-review` de la iteración 1, la iteración 2 volvió a leer la épica
+  # entera sólo para reportar el mismo bloqueo.
+  if [[ -n "$EPICA" ]] && checkpoint_needs_owner "$output"; then
+    log "épica $EPICA en checkpoint que requiere sign-off del owner → deteniendo"
+    log "  (plan L4 recién escrito o escalación sin verificar — lo destraba una persona, no otra iteración)"
+    break
+  fi
+
   # ---------------------------------------------------------------------------------------------
   # Clasificación de la terminación ANTES de mirar el disco.
   #
@@ -682,8 +729,12 @@ while true; do
     if [[ "$new_hash" != "$prev_hash" ]]; then
       log "⚠ hubo cambios en disco SIN marcador de cierre → hay trabajo a medias que la próxima"
       log "  iteración va a heredar sin saberlo. Revisá antes de reanudar."
-      dirty="$(dirty_repos)"
-      [[ -n "$dirty" ]] && log "  repos con cambios sin commitear: $dirty"
+      dirty="$(dirty_repos_since "$dirty_before")"
+      if [[ -n "$dirty" ]]; then
+        log "  repos que ensució ESTA iteración: $dirty"
+      else
+        log "  ningún repo cambió en esta iteración (el cambio de hash vino del roadmap/épicas)"
+      fi
     fi
     # Una terminación anormal NUNCA cuenta como progreso, haya escrito o no.
     no_progress_streak=$((no_progress_streak + 1))
