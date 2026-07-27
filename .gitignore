@@ -104,3 +104,6 @@ plans/**/*.md
 .hermes/plans/*.md
 # Nota: igual que arriba — se dejó de versionar el índice local.
 # !.hermes/plans/INDEX.md
+
+# Configuración MCP local (ruta absoluta / credenciales potenciales)
+.mcp.json

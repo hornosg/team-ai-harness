@@ -32,9 +32,19 @@ Bajo **Claude Code con backend Anthropic nativo** (el caso normal, ADR-001) el `
 frontmatter de cada agente SE RESPETA — la matriz haiku/sonnet/opus de
 `routing-rules.yaml → agent_providers` aplica por agente.
 
+### Opción B — dispatcher por agente
+
+Cuando el dispatcher provider-neutral está activo, la selección del agente es independiente
+del frontend que inició la sesión (`execution_origin`). `task_type_routing` puede devolver
+`codex/gpt-5.6-luna` para código L1/L2, mientras Claude y Ollama siguen disponibles como
+adapters explícitos. El campo `model:` escalar se mantiene como compatibilidad del runtime
+nativo; el dispatcher exige un modelo explícito para providers externos.
+
 **Excepción — fallback kimi**: si el owner relanzó la sesión con
-`claude --dangerously-skip-permissions --model kimi-k2.7-code:cloud` (sin tokens Anthropic),
-el backing es GLOBAL: todos los agentes corren kimi, el ruteo por-agente se ignora, y
+`ollama launch claude --model kimi-k2.7-code:cloud -- --dangerously-skip-permissions` (Claude Code
+lanzado por Ollama contra su endpoint, sin tokens Anthropic — mismo backing que el loop autónomo
+corrido con `loop-runner.sh --provider ollama`), el backing es GLOBAL: todos los agentes corren kimi,
+el ruteo por-agente se ignora, y
 **el `Detalle de ejecución` de los artefactos pasa a `reforzado`** sí o sí
 (`routing-rules.yaml → capability_tiers`). La calidad la da la autosuficiencia del artefacto, no
 el modelo. L4 nunca se auto-aprueba sobre ese backing: se marca y escala al owner.
@@ -45,7 +55,7 @@ el modelo. L4 nunca se auto-aprueba sobre ese backing: se marca y escala al owne
 config/routing-rules.yaml → sección provider_routing
 ```
 
-Si no existe o no tiene `provider_routing`: usar defaults Claude (opus para L2/L3/L4 y decisiones de juicio, `claude-sonnet-4-6` como fallback de implementadores codex, haiku para L1 y orquestadores).
+Si no existe o no tiene `provider_routing`: usar defaults Claude (opus para L2/L3/L4 y decisiones de juicio, `claude-sonnet-5` como fallback de implementadores codex, haiku para L1 y orquestadores).
 
 ## Paso 2 — Clasificar tipo de tarea
 
@@ -122,7 +132,7 @@ ALTERNATIVA:          [provider/modelo si el principal no está disponible]
 ## Casos edge
 
 **Provider no disponible:**
-Jerarquía de fallback: `codex → claude-sonnet-4-6 → ollama/llama3.1` (Sonnet más nuevo disponible; en L3/L4 el fallback escala a `claude-opus-4-8`).
+Jerarquía de fallback: `codex → claude-sonnet-5 → ollama/llama3.1` (en L3/L4 el fallback escala a `claude-opus-4-8`).
 Indicar en `ALTERNATIVA` y notificar al owner.
 
 **Tarea mixta — código + decisiones de arquitectura:**
@@ -132,7 +142,7 @@ Separar en dos pedidos. La parte de arquitectura siempre va a `claude/claude-opu
 Aceptar. Documentar en `REASONING: override manual por owner — [razón]`. No bloquear.
 
 **Sin `provider_routing` en routing-rules.yaml:**
-Usar defaults Claude: orchestrators → `claude-haiku-4-5-20251001`, implementadores (fallback de codex) → `claude-sonnet-4-6`, decisiones críticas / no-código → `claude-opus-4-8`.
+Usar defaults Claude: orchestrators → `claude-haiku-4-5-20251001`, implementadores (fallback de codex) → `claude-sonnet-5`, decisiones críticas / no-código → `claude-opus-4-8`.
 
 **Tarea L1 con urgencia y Ollama no disponible:**
 Fallback a `claude-haiku-4-5-20251001`. No degradar a un provider sin disponibilidad confirmada.

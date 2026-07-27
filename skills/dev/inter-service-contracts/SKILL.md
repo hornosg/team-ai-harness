@@ -146,8 +146,8 @@ grep -rn "http.NewRequest\|http.Get\|Client.Do" \
 Todos los servicios del ecosistema exponen sus rutas a través de `lab-kong`. Los clientes entre servicios deben usar nombres de contenedor directamente (red `lab-network`) en el lab, o pasar por Kong en producción.
 
 ```bash
-# Ver configuración de Kong
-cat infra/kong/kong.yml 2>/dev/null || find . -name "kong.yml" | xargs cat 2>/dev/null | head -80
+# Ver configuración de Kong (fuente única: infra/api-gateway/kong.yml.template, ver MC-E28)
+cat infra/api-gateway/kong.yml.template 2>/dev/null || find . -name "kong.yml.template" | xargs cat 2>/dev/null | head -80
 ```
 
 Para cada cliente HTTP interno:

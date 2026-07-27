@@ -33,8 +33,10 @@ frontmatter de cada agente SE RESPETA — la matriz haiku/sonnet/opus de
 `routing-rules.yaml → agent_providers` aplica por agente.
 
 **Excepción — fallback kimi**: si el owner relanzó la sesión con
-`claude --dangerously-skip-permissions --model kimi-k2.7-code:cloud` (sin tokens Anthropic),
-el backing es GLOBAL: todos los agentes corren kimi, el ruteo por-agente se ignora, y
+`ollama launch claude --model kimi-k2.7-code:cloud -- --dangerously-skip-permissions` (Claude Code
+lanzado por Ollama contra su endpoint, sin tokens Anthropic — mismo backing que el loop autónomo
+corrido con `loop-runner.sh --provider ollama`), el backing es GLOBAL: todos los agentes corren kimi,
+el ruteo por-agente se ignora, y
 **el `Detalle de ejecución` de los artefactos pasa a `reforzado`** sí o sí
 (`routing-rules.yaml → capability_tiers`). La calidad la da la autosuficiencia del artefacto, no
 el modelo. L4 nunca se auto-aprueba sobre ese backing: se marca y escala al owner.

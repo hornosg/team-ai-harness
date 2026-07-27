@@ -124,12 +124,12 @@ provider_routing:
   # L4 siempre usa Claude — nunca negociable
   l4_provider_lock: claude
 
-  # Política de modelos (ADR-001, 2026-07-02): Anthropic-first en tres tiers —
-  # haiku (ruteo/bajo riesgo), sonnet (implementación), opus (crítico/L3-L4).
-  # Codex (OpenAI) fue retirado de la matriz. Ollama queda SOLO como fallback manual.
+  # Política de modelos: Claude sigue siendo el runtime nativo y el provider frontier para
+  # juicio/L3/L4. Codex se habilita por agente para code_generation L1/L2 mediante el
+  # dispatcher; Ollama conserva su fallback global y también puede seleccionarse por agente.
   providers:
     claude:
-      description: Único provider activo. haiku = ruteo/clasificación/bajo riesgo;
+      description: Runtime nativo y provider frontier. haiku = ruteo/clasificación/bajo riesgo;
         sonnet = implementación de código; opus = razonamiento profundo, compliance,
         decisiones irreversibles, L3/L4.
       api: anthropic
@@ -138,10 +138,19 @@ provider_routing:
         medium: claude-sonnet-5
         low: claude-haiku-4-5-20251001
 
+    codex:
+      description: Provider por agente para generación de código L1/L2. No reemplaza el
+        runtime nativo de Claude Code y no puede auto-aprobar L3/L4.
+      api: codex_cli
+      models:
+        default: gpt-5.6-luna
+        compatible: [codex-5.5]
+      dispatch: per_agent
+
     ollama:
       description: FALLBACK MANUAL DE EMERGENCIA — no participa del ruteo normal.
         Cuando el owner agota tokens Anthropic, relanza la sesión con
-        `claude --dangerously-skip-permissions --model kimi-k2.7-code:cloud`.
+        `ollama launch claude --model kimi-k2.7-code:cloud -- --dangerously-skip-permissions`.
         El backing pasa a ser GLOBAL (todos los agentes corren kimi) y el detalle de
         ejecución de los artefactos sube a `reforzado` (ver capability_tiers).
       api: ollama_cloud
@@ -165,7 +174,8 @@ provider_routing:
       L4 sigue exigiendo razonamiento frontier para architect+security. Si el único backing
       disponible es open_mid (fallback kimi), L4 NO se auto-aprueba: se marca y se escala al owner.
 
-  # Provider por agente (default — puede ser sobreescrito por ceremony_overrides)
+  # Provider por agente en modo nativo/fallback. Cuando el dispatcher Opción B está activo,
+  # task_type_routing elige el provider externo sin alterar estos defaults de compatibilidad.
   agent_providers:
     # Orquestadores → haiku (ruteo determinístico, bajo costo)
     meta-router: claude/claude-haiku-4-5-20251001
@@ -228,9 +238,10 @@ provider_routing:
   # Routing por tipo de tarea (menor precedencia — se aplica cuando el nivel no es L3/L4)
   task_type_routing:
     code_generation:
-      preferred_provider: claude
-      model: claude-sonnet-5
+      preferred_provider: codex
+      model: gpt-5.6-luna
       applies_to: [dev-senior-backend, dev-senior-frontend, dev-junior-backend, dev-junior-frontend]
+      dispatch: per_agent
     architecture:
       preferred_provider: claude
       model: claude-opus-4-8

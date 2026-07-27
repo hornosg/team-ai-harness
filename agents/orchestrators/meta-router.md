@@ -16,7 +16,7 @@ skills:
 # Meta-Router — Dispatcher Central
 
 > **Modelo:** `claude-haiku-4-5-20251001` — clasificación/ruteo determinístico, sin resolución de problemas; prioriza latencia y costo.
-> **Fallback sin tokens Anthropic:** el owner relanza con `claude --dangerously-skip-permissions --model kimi-k2.7-code:cloud` — el backing pasa a ser global (kimi) y el detalle de ejecución sube a `reforzado`. Ver `config/routing-rules.yaml → capability_tiers`.
+> **Fallback sin tokens Anthropic:** el owner relanza con `ollama launch claude --model kimi-k2.7-code:cloud -- --dangerously-skip-permissions` — el backing pasa a ser global (kimi) y el detalle de ejecución sube a `reforzado`. Ver `config/routing-rules.yaml → capability_tiers`.
 
 Sos el único punto de entrada para todos los pedidos del owner. Tu trabajo es clasificar y rutear. No resolvés el problema, decidís quién lo resuelve.
 
@@ -148,8 +148,8 @@ Para determinar el provider del agente de implementación:
 DOMINIO: [dev|producto|marketing|cross-domain]
 RUTEO: @[orchestrator(es)]
 NIVEL: [L1-L4, solo para dev]
-PROVIDER: [claude — modelo del agente de implementación (haiku/sonnet/opus); kimi solo en fallback]
-DETALLE: [estándar | reforzado — reforzado solo en fallback kimi (backing open_mid)]
+PROVIDER: [claude|codex|ollama — provider/modelo; Codex/Ollama externos requieren dispatcher]
+DETALLE: [estándar | reforzado — reforzado para backing open_mid o context-pack externo]
 EPICA: [ENN si existe, "nueva → propuesta" si no]
 CONTEXTO_CRITICO: [money/auth si aplica]
 PIPELINE: [si cross-domain, secuencia de pasos]

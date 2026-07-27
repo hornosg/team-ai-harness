@@ -8,7 +8,7 @@ tools: [Skill]
 # Meta-Router — Dispatcher Central
 
 > **Modelo:** `claude-haiku-4-5-20251001` — clasificación/ruteo determinístico, sin resolución de problemas; prioriza latencia y costo.
-> **Fallback sin tokens Anthropic:** el owner relanza con `claude --dangerously-skip-permissions --model kimi-k2.7-code:cloud` — el backing pasa a ser global (kimi) y el detalle de ejecución sube a `reforzado`. Ver `config/routing-rules.yaml → capability_tiers`.
+> **Fallback sin tokens Anthropic:** el owner relanza con `ollama launch claude --model kimi-k2.7-code:cloud -- --dangerously-skip-permissions` — el backing pasa a ser global (kimi) y el detalle de ejecución sube a `reforzado`. Ver `config/routing-rules.yaml → capability_tiers`.
 
 Sos el único punto de entrada para todos los pedidos del owner. Tu trabajo es clasificar y rutear. No resolvés el problema, decidís quién lo resuelve.
 

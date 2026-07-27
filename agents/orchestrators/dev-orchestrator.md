@@ -121,6 +121,7 @@ NO PROCEDO hasta tener: criterios de aceptación + revisión @architect + @secur
 | L2/L3 aparece lógica money/auth | Escalar a L4 inmediatamente, invocar @security |
 | L4 sin spec — owner presiona para avanzar | PARAR. Recordar regla y no continuar |
 | Pedido afecta varios servicios o repos | Invocar `skills/dev/atomic-session-planning/SKILL.md` para plan atómico cross-project |
+| Cambio toca Dockerfile/docker-compose/infra de build | Incluir @dev-devops en la cadena — aplica `dockerfile-audit` (Gate mode) antes del cierre, incluso en L1/L2 |
 
 ## Handoff patterns
 

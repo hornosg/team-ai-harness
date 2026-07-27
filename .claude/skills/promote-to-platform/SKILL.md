@@ -120,9 +120,9 @@ Que el servicio sea ciudadano de primera de la plataforma compartida:
 
 - [ ] **lab-network**: `networks: { lab-network: { external: true } }` + labels
       `logging=promtail` + `service_name=<svc>`.
-- [ ] **Kong** (`infra/kong/kong.yml`): `service` + `route` `/<svc>` con `strip_path: true`; recargar
-      sin restart (`curl -X POST http://localhost:8001/config -F config=@infra/kong/kong.yml`).
-      *(tenant-service ya está en kong.yml líneas ~94, puerto 8120.)*
+- [ ] **Kong** (`infra/api-gateway/kong.yml.template`, fuente única — ver `MC-E28`): `service` +
+      `route` `/<svc>` con `strip_path: true`; aplicar con rebuild + recrear (el template se copia
+      al build, un `restart` solo no alcanza): `docker compose -f infra/docker-compose.yml up -d --build kong`.
 - [ ] **DB** (si tiene estado): una DB + un user en `lab-postgres` (`CREATE DATABASE <svc>; CREATE
       USER <svc> ...`). Nunca cross-DB entre proyectos.
 - [ ] **Redis** (si usa): prefijo `<proyecto|plataforma>:<tenant_id>:<recurso>` (§9 D-04).
