@@ -112,7 +112,16 @@ SELECT_AGENT="meta-router"      # fase SELECT: clasificar/elegir, no ejecutar (h
 FALLBACK_EXEC_AGENT="dev-senior-backend"  # si SELECT no designa un agente válido para EXEC
 SELECT_MAX_TURNS=15             # SELECT sólo lee y decide: no necesita el presupuesto de EXEC
 SECURITY_AGENT="dev-security"   # fase REVIEW en L4 — opus y read-only por frontmatter
-REVIEW_MAX_TURNS=25             # revisar es leer y dictaminar, no implementar
+REVIEW_MAX_TURNS=25             # gate de PLAN: revisar un diseño entero y sus decisiones abiertas
+# Gate de COMMIT (una tarea ya implementada): revisar un diff acotado es mucho menos trabajo que
+# revisar un plan completo. Distinguirlos importa por costo: una épica L4 con 25 tareas dispara 25
+# gates de commit, y cobrarlos al precio de un gate de plan agota la ventana de uso antes de
+# terminar la épica (medido en PLAT-E39, 2026-07-27: 32% de la ventana de 5h en la primera tarea).
+REVIEW_COMMIT_TURNS=15
+# La remediación automática aplica al PLAN (corregir un diseño es barato y acotado). Sobre un diff
+# ya implementado, un `bloqueante` significa reescribir código: eso vuelve por el loop normal como
+# una tarea más, no por un ciclo de remediación dentro del gate.
+REMEDIATE_ON_COMMIT=false
 # Sign-off interactivo del owner tras la revisión L4. OPT-IN y sólo con TTY: el loop está pensado
 # para correr desatendido, y un `read` sin terminal (cron, nohup, background) cuelga el proceso
 # para siempre. Sin TTY o sin el flag, el comportamiento es el de siempre: cortar con checkpoint
@@ -156,6 +165,9 @@ while [[ $# -gt 0 ]]; do
     --signoff-timeout) SIGNOFF_TIMEOUT="$2"; shift 2 ;;
     --remediate-agent) REMEDIATE_AGENT="$2"; shift 2 ;;
     --remediate-cycles) REMEDIATE_CYCLES="$2"; shift 2 ;;
+    --review-turns) REVIEW_MAX_TURNS="$2"; shift 2 ;;
+    --review-commit-turns) REVIEW_COMMIT_TURNS="$2"; shift 2 ;;
+    --remediate-on-commit) REMEDIATE_ON_COMMIT=true; shift ;;
     --dry-run) DRY_RUN=true; shift ;;
     *) echo "Argumento desconocido: $1" >&2; exit 1 ;;
   esac
@@ -333,6 +345,29 @@ prompt_signoff() {
   esac
 }
 
+# Vuelca la traza de la iteración. Es una función y no un bloque inline porque hay que llamarla
+# también ANTES de cada `break`: cuando el gate L4 cortaba dentro del bloque de fases, la escritura
+# quedaba río abajo y se perdía el log justo de la iteración que falló. En PLAT-E39.T1 el archivo
+# decía "FASE EXEC: <no corrió>" cuando EXEC había corrido y dejado un sign-off.
+write_iter_log() {
+  [[ -n "${ITER_LOG_DIR:-}" ]] || return 0
+  mkdir -p "$ITER_LOG_DIR"
+  # TODAS las fases van al log, no sólo la que define el marcador terminal: cuando una iteración
+  # sale mal, la mitad de las veces la causa está en la selección o en la revisión.
+  {
+    if [[ "$PHASES" == "split" ]]; then
+      printf '===== FASE SELECT (@%s) =====\n%s\n' "$SELECT_AGENT" "${select_output:-<no corrió>}"
+      printf '\n===== FASE EXEC (@%s) =====\n%s\n' "${sel_agente:-<no despachada>}" "${exec_output:-<no corrió>}"
+      if [[ -n "${review_output:-}" ]]; then
+        printf '\n===== FASE REVIEW (@%s) =====\n%s\n' "$SECURITY_AGENT" "$review_output"
+        printf '\nVEREDICTO: %s\n' "${review_verdict:-<ninguno>}"
+      fi
+    else
+      printf '%s\n' "$output"
+    fi
+  } > "$ITER_LOG_DIR/iter-$(printf '%03d' "$iteration").log"
+}
+
 # Corre el gate L4 completo: REVIEW de seguridad → sign-off del owner → registro en disco.
 #
 # Se invoca desde DOS lugares, y esa es la razón de que sea una función:
@@ -342,9 +377,16 @@ prompt_signoff() {
 #
 # Devuelve 0 si el gate quedó APROBADO (el loop puede seguir), 1 si no (el loop corta).
 run_l4_gate() {
-  local epica="$1" tarea="$2" contexto="$3"
+  local epica="$1" tarea="$2" contexto="$3" modo="${4:-plan}"
 
   [[ -n "$SECURITY_AGENT" ]] || { log "  fase REVIEW desactivada (--no-security-review) → no se puede pasar el gate"; return 1; }
+
+  # Presupuesto y política de remediación según qué se revisa.
+  local turns="$REVIEW_MAX_TURNS" cycles="$REMEDIATE_CYCLES"
+  if [[ "$modo" == "commit" ]]; then
+    turns="$REVIEW_COMMIT_TURNS"
+    [[ "$REMEDIATE_ON_COMMIT" == true ]] || cycles=0
+  fi
 
   local prompt="Revisión de seguridad OBLIGATORIA del gate L4 (RULE-10). $scope_prompt"
   prompt="$prompt Épica: $epica. Tarea/alcance: $tarea. $contexto"
@@ -359,8 +401,8 @@ run_l4_gate() {
 
   local cycle=0 first_verdict="" remediation_trail=""
   while :; do
-    log "iteración $iteration — fase REVIEW L4 de $epica.$tarea con @$SECURITY_AGENT (ciclo $((cycle + 1)), --max-turns $REVIEW_MAX_TURNS)"
-    review_output="$(dispatch_agent "$SECURITY_AGENT" "$prompt" "$REVIEW_MAX_TURNS")"
+    log "iteración $iteration — fase REVIEW L4 ($modo) de $epica.$tarea con @$SECURITY_AGENT (ciclo $((cycle + 1)), --max-turns $turns)"
+    review_output="$(dispatch_agent "$SECURITY_AGENT" "$prompt" "$turns")"
     echo "$review_output"
     review_verdict="$(echo "$review_output" | grep -oE "SECURITY-REVIEW: (ok|objeciones|bloqueante)[^\\\\\"]*" | tail -1 || true)"
     [[ -z "$review_verdict" ]] && review_verdict="SECURITY-REVIEW: <sin veredicto — la revisión no cerró>"
@@ -368,8 +410,8 @@ run_l4_gate() {
 
     echo "$review_verdict" | grep -q "bloqueante" || break
 
-    if [[ "$cycle" -ge "$REMEDIATE_CYCLES" ]]; then
-      log "⚠ @$SECURITY_AGENT marcó BLOQUEANTE y se agotaron los ciclos de remediación ($REMEDIATE_CYCLES)"
+    if [[ "$cycle" -ge "$cycles" ]]; then
+      log "⚠ @$SECURITY_AGENT marcó BLOQUEANTE y se agotaron los ciclos de remediación ($cycles)"
       log "  → no se ofrece sign-off. Las objeciones quedan registradas para resolverlas a mano."
       write_signoff "NO APROBADO (bloqueante de seguridad)" "$epica" "$tarea" "$review_verdict" \
         "$review_output$remediation_trail" || true
@@ -386,7 +428,7 @@ run_l4_gate() {
     # siendo obligatorio al final. La remediación NO puede aprobar nada por sí sola.
     # ---------------------------------------------------------------------------------------
     cycle=$((cycle + 1))
-    log "iteración $iteration — fase REMEDIATE (ciclo $cycle/$REMEDIATE_CYCLES) con @$REMEDIATE_AGENT"
+    log "iteración $iteration — fase REMEDIATE (ciclo $cycle/$cycles) con @$REMEDIATE_AGENT"
     local rem_prompt="@$SECURITY_AGENT bloqueó el gate L4 de $epica. $scope_prompt"
     rem_prompt="$rem_prompt Tu tarea es RESOLVER sus objeciones bloqueantes EN EL PLAN de la épica."
     rem_prompt="$rem_prompt Reglas, no negociables:"
@@ -421,6 +463,17 @@ run_l4_gate() {
   if [[ "$cycle" -gt 0 ]]; then
     log "✓ gate destrabado tras $cycle ciclo(s) de remediación — veredicto inicial: ${first_verdict:0:60}…"
     review_output="$review_output$remediation_trail"
+  fi
+
+  # Una revisión que no cerró NO es una revisión. Ofrecer el sign-off acá sería pedirle al owner
+  # que apruebe algo que nadie llegó a mirar — peor que no preguntar, porque el archivo quedaría
+  # diciendo "APROBADO" con un veredicto vacío al lado. Observado en PLAT-E39.T1 (2026-07-27): la
+  # revisión murió sin emitir `SECURITY-REVIEW:` y el runner igual abrió el prompt.
+  if echo "$review_verdict" | grep -q "sin veredicto"; then
+    log "⚠ la revisión de seguridad NO cerró (sin marcador SECURITY-REVIEW) → no se ofrece sign-off"
+    log "  Probable causa: agotó los $turns turnos. Subilos con --review-turns/--review-commit-turns."
+    write_signoff "SIN REVISAR (la revisión de seguridad no cerró)" "$epica" "$tarea" "$review_verdict" "$review_output" || true
+    return 1
   fi
 
   if [[ "$INTERACTIVE_SIGNOFF" != true || ! -t 0 ]]; then
@@ -853,10 +906,12 @@ while true; do
         if [[ "$sel_ceremony" == "L4" && -n "$SECURITY_AGENT" ]] \
            && ! echo "$exec_output" | grep -q "NEXT-TASK: blocked"; then
           if run_l4_gate "$sel_epica" "$sel_tarea" \
-               "Lo acaba de ejecutar @$sel_agente en esta misma iteración."; then
+               "Lo acaba de ejecutar @$sel_agente en esta misma iteración. Revisá el DIFF sin commitear." \
+               "commit"; then
             log "✓ gate L4 aprobado — la próxima iteración puede avanzar"
           else
             log "gate L4 no superado → deteniendo"
+            write_iter_log
             break
           fi
         fi
@@ -870,19 +925,7 @@ while true; do
   # /model y relanza el loop. Se chequea ANTES que is_quota_block (mensajes mutuamente excluyentes).
   # Traza de auditoría: sin esto, la salida de cada iteración se pierde si nadie mira la consola,
   # y no hay forma de reconstruir por qué una tarea quedó como quedó.
-  if [[ -n "${ITER_LOG_DIR:-}" ]]; then
-    mkdir -p "$ITER_LOG_DIR"
-    # Las DOS fases van al log, no sólo la que define el marcador terminal: cuando una iteración
-    # sale mal, la mitad de las veces la causa está en la selección, no en la ejecución.
-    {
-      if [[ "$PHASES" == "split" ]]; then
-        printf '===== FASE SELECT (@%s) =====\n%s\n' "$SELECT_AGENT" "${select_output:-<no corrió>}"
-        printf '\n===== FASE EXEC (@%s) =====\n%s\n' "${sel_agente:-<no despachada>}" "${exec_output:-<no corrió>}"
-      else
-        printf '%s\n' "$output"
-      fi
-    } > "$ITER_LOG_DIR/iter-$(printf '%03d' "$iteration").log"
-  fi
+  write_iter_log
 
   if is_spend_limit "$output"; then
     log "tope de gasto alcanzado (no hay reset horario que esperar) → deteniendo. Subilo en claude.ai/settings/usage y relanzá el loop."
@@ -930,13 +973,15 @@ while true; do
     gates_run="${gates_run:-} $gate_epica"
     log "iteración $iteration — épica $gate_epica frenada por gate L4 pendiente → corriendo la revisión que lo destraba"
     if run_l4_gate "${gate_epica:-desconocida}" "GATE" \
-         "El plan/trabajo ya existe de una iteración anterior y está esperando este gate."; then
+         "El plan/trabajo ya existe de una iteración anterior y está esperando este gate." \
+         "plan"; then
       log "✓ gate L4 aprobado y registrado — reanudando el loop"
       prev_hash="$(state_hash)"
       no_progress_streak=0
       continue
     fi
     log "gate L4 no superado → deteniendo"
+    write_iter_log
     break
   fi
 

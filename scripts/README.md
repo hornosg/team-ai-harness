@@ -41,7 +41,10 @@ Desde 2026-07-27 cada iteración son **dos invocaciones** (`SELECT` → `EXEC`) 
 | `--interactive-signoff` | desactivado | Tras REVIEW, pregunta `¿Aprobás? [s/N]` por consola. **Sólo con TTY**: sin terminal se registra el veredicto y sigue, nunca cuelga. |
 | `--signoff-timeout N` | `600` | Segundos de espera de esa respuesta. Vencido = NO aprobado. |
 | `--remediate-agent <a>` | `dev-architect` | Quien corrige el plan tras un veredicto `bloqueante`. Necesita `Write` (`dev-security` es read-only). |
-| `--remediate-cycles N` | `1` | Ciclos de remediación + re-revisión antes de rendirse. `0` desactiva: `bloqueante` corta de una. |
+| `--remediate-cycles N` | `1` | Ciclos de remediación + re-revisión en el gate de **plan**. `0` desactiva: `bloqueante` corta de una. |
+| `--review-turns N` | `25` | Presupuesto del gate de **plan** (revisar un diseño entero). |
+| `--review-commit-turns N` | `15` | Presupuesto del gate de **commit** (revisar un diff acotado). |
+| `--remediate-on-commit` | desactivado | Permite remediación automática también sobre diffs. Por defecto no: un `bloqueante` sobre código vuelve por el loop normal como una tarea más. |
 | `--exec-agent <a>` | `dev-senior-backend` | Fallback de EXEC cuando SELECT no designa un agente válido. |
 | `--max-iterations N` | `0` (sin límite duro) | Tope de iteraciones. El freno real es la racha de no-progreso. |
 | `--max-turns N` | `40` | Presupuesto de turnos de la fase EXEC. SELECT usa 15 fijo (sólo lee y decide). |
@@ -113,6 +116,29 @@ Toda decisión se escribe en `management/escalations/AAAA-MM-DD_<épica>-<tarea>
 veredicto de seguridad completo, incluido el rastro de las remediaciones. **El sign-off no es un
 keystroke: es un archivo.** Sin rastro de qué se aprobó y con qué análisis, el gate L4 se degrada
 a un trámite.
+
+### Los dos gates no cuestan lo mismo
+
+| | Gate de **plan** | Gate de **commit** |
+|---|---|---|
+| Cuándo | una vez por épica, cuando el plan espera revisión | por cada tarea L4 implementada |
+| Qué revisa | el diseño y sus decisiones abiertas | el diff sin commitear |
+| Presupuesto | 25 turnos | 15 turnos |
+| Remediación | 1 ciclo | ninguno (opt-in con `--remediate-on-commit`) |
+
+La distinción es de **costo**, y no es teórica: una épica L4 con 25 tareas dispara 25 gates de
+commit. Cobrarlos al precio de un gate de plan agota la ventana de uso antes de terminar la épica
+— medido en PLAT-E39 el 2026-07-27: 32% de una ventana de 5h consumido en la primera tarea.
+
+Sobre un diff, además, la remediación automática tiene menos sentido: un `bloqueante` ahí significa
+reescribir código, y eso vuelve por el loop normal como una tarea más, con su propio ciclo completo.
+
+### Si la revisión no cierra
+
+Una revisión que muere sin emitir `SECURITY-REVIEW:` **no ofrece sign-off**. Pedirte que apruebes
+algo que nadie llegó a mirar es peor que no preguntar: el archivo quedaría diciendo "APROBADO" con
+un veredicto vacío al lado. Se registra como `SIN REVISAR` y el loop corta, sugiriendo subir el
+presupuesto de turnos.
 
 ### Fase REMEDIATE — qué pasa tras un `bloqueante`
 
