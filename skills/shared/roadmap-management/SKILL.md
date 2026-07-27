@@ -111,8 +111,23 @@ Trigger: propuesta aprobada por el owner.
      depende_de: [KEY-ENN, ...]   # opcional — ids PREFIJADOS de épicas que deben estar `estado: completo` antes
      archivo: <scope-dir>/epicas/ENN-[nombre].md   # ej. "platform/epicas/..." o "projects/mercado-cercano/epicas/..."
      servicios: [lista]
-     descripcion: "[una oración]"
    ```
+
+6. La `descripcion:` **NO va en el índice** — va en el hermano `roadmap-descripciones.yaml`,
+   como entrada top-level `<ID>: "[una oración]"`:
+   ```yaml
+   PLAT-E40: "[una oración]"
+   ```
+
+   **Por qué está partido** (2026-07-27, medido): el índice es lo único que TODA iteración del
+   loop carga entero para elegir la próxima tarea, y el 53% de sus bytes eran descripciones —
+   32,7 KB de ellas pertenecientes a épicas ya `completo`, cargadas para no usarse nunca. El
+   split bajó el índice de 122,1 KB a 47,8 KB sin perder un solo campo. La descripción se lee
+   del hermano **bajo demanda y de a una**, y sólo cuando hace falta de verdad: si la épica ya
+   tiene `archivo:`, la fuente de verdad es ese archivo y la descripción no aporta nada.
+
+   `scripts/split-roadmap.py check` falla si una descripción vuelve al índice — correrlo después
+   de tocar el roadmap. `scripts/split-roadmap.py split` migra las que se hayan colado.
 
    **`depende_de:` es la fuente verificable por máquina del orden de ejecución** (la consume
    `loop-next-task` §1ter para decidir elegibilidad). El árbol narrativo en comentarios YAML

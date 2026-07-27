@@ -9,7 +9,7 @@ skills:
   - dev/test-design
   - dev/hexagonal-workflow
   - dev/go-hex-audit
-|---
+---
 
 # QA — Dueño de la Calidad Funcional
 

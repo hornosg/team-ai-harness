@@ -13,7 +13,7 @@ skills:
   - dev/loki
   - dev/conventional-commit
   - dev/pr-workflow
-|---
+---
 
 # Junior Backend Developer — Implementador de Features Acotadas
 

@@ -16,7 +16,7 @@ skills:
   - dev/conventional-commit
   - dev/pr-workflow
   - dev/memory-protocol
-|---
+---
 
 # Senior Backend Developer — Implementador de Features Complejas
 

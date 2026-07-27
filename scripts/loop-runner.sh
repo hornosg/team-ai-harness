@@ -13,8 +13,9 @@
 # Uso:
 #   ./scripts/loop-runner.sh [--proyecto <nombre>] [--epica <KEY-ENN>]
 #                            [--roadmap path/a/roadmap.yaml]
-#                            [--provider anthropic|ollama] [--model <alias>] [--ollama-model <id>]
-#                            [--max-iterations N] [--dry-run]
+#                            [--provider anthropic|ollama|codex] [--model <alias>] [--ollama-model <id>]
+#                            [--phases split|single] [--select-agent <a>] [--exec-agent <a>]
+#                            [--max-iterations N] [--max-turns N] [--dry-run]
 #
 # roadmap.yaml es ÚNICO y multi-proyecto desde 2026-07-02 (decisión del owner) — path por
 # defecto: $DEVY_ROADMAP_PATH (definida en ~/.zshrc; fallback ~/Projects/management/roadmap.yaml
@@ -37,9 +38,16 @@
 # reiterar una épica fijada que no puede avanzar no aporta nada). Origen: pedido del owner
 # 2026-07-08 — PLAT-E25 quedó huérfana porque la selección global nunca la elegía.
 #
-# --provider (opcional, default anthropic) elige el backing del loop SIN perder el modo original:
-#   - anthropic (default): invoca `claude -p ...` contra el backend Anthropic nativo — comportamiento
-#     histórico, intacto.
+# TODA invocación pasa por `scripts/agent-dispatcher.py` (2026-07-27). Antes sólo `--provider codex`
+# lo usaba y las ramas anthropic/ollama llamaban al CLI directo, salteándose la resolución
+# agente→modelo→contexto: no se cargaba el frontmatter del agente y toda la iteración corría al
+# precio del `--model` del loop. Ahora el modelo sale del frontmatter de cada agente (haiku para
+# orquestar, sonnet para ejecutar, opus para gates L4) salvo override explícito con --model.
+#
+# --provider (opcional, default anthropic) elige el backing del loop:
+#   - anthropic (default): dispatcher con `--provider claude` → `claude -p` contra el backend
+#     Anthropic nativo, con context-mode `native` (punteros en vez de contexto inline: el runtime
+#     ya carga los CLAUDE.md y tiene el tool `Skill`).
 #   - ollama: invoca `ollama launch claude --model <OLLAMA_MODEL> -- -p ...`, que lanza Claude Code
 #     apuntando al endpoint de Ollama con un modelo abierto (default kimi-k2.7-code:cloud). No consume
 #     cupo Anthropic. --ollama-model overridea el modelo (ej. kimi-k2.6:cloud). Impacto de calidad/
@@ -48,12 +56,22 @@
 #     NOTA: la espera por cuota (wait_for_quota_reset) es específica del bloqueo de Anthropic; bajo
 #     ollama no aplica y un rate-limit de kimi-cloud hoy se contaría como no-progreso. Manejo dedicado
 #     pendiente hasta tener un ejemplo del formato de error que devuelve kimi-cloud.
+#   - codex: dispatcher con `codex exec` y context-mode `full` — Codex no conoce el harness ni
+#     tiene el tool `Skill`, así que el contexto y las skills viajan inline. Requiere --model.
 #
-# --model (opcional, solo provider anthropic) fija el modelo del `claude -p` de cada iteración —
-#   alias `opus`/`sonnet`/`haiku`/`fable` o nombre completo (`claude-sonnet-5`). SIN --model
-#   (default) corre con el modelo de la config, comportamiento histórico intacto. Útil para correr
-#   el loop en un modelo/pool distinto (ej. cuando el default se quedó "out of usage credits").
-#   Para el provider ollama el modelo lo fija --ollama-model, no --model.
+# --model (opcional) fija el modelo de TODAS las fases, pisando el frontmatter de cada agente —
+#   alias `opus`/`sonnet`/`haiku`/`fable` o nombre completo (`claude-sonnet-5`). Es un override de
+#   emergencia (ej. el pool del default se quedó "out of usage credits"), no el modo normal: sin
+#   --model cada agente corre en el modelo que declara. Para el provider ollama el modelo lo fija
+#   --ollama-model (el backing es global, el frontmatter no aplica).
+#
+# --phases split|single (default split) — ver "Contrato de fases" en la skill loop-next-task:
+#   split  = SELECT (@meta-router, haiku: elige la tarea, no ejecuta) → EXEC (el agente que SELECT
+#            designó, con su modelo: ejecuta esa única tarea y cierra). Es lo que hace que el
+#            modelo por agente signifique algo, y lo que le da a cada fase su contexto mínimo.
+#   single = una sola invocación hace todo (comportamiento previo). Escape hatch si el handoff
+#            entre fases falla.
+# --select-agent / --exec-agent overridean el agente de SELECT y el fallback de EXEC.
 #
 # Permisos: corre con --dangerously-skip-permissions (override del owner, 2026-07-02 —
 # supersede la mitigación original de PROP-008 de nunca usarlo sobre $HOME). Riesgo
@@ -77,12 +95,32 @@ ROOT="$(pwd)"
 ROADMAP_GLOB="${DEVY_ROADMAP_PATH:-$HOME/Projects/management/roadmap.yaml}"
 PROYECTO=""        # vacío = dejar que @meta-router infiera el proyecto del cwd (ver --proyecto)
 EPICA=""           # vacío = selección automática de épica; ver --epica arriba
-PROVIDER="anthropic"                  # backing del loop: anthropic (default) | ollama
-MODEL=""                              # --model del CLI (solo anthropic): vacío = modelo default de la config
+PROVIDER="anthropic"                  # backing del loop: anthropic (default) | ollama | codex
+MODEL=""                              # --model de anthropic/codex: vacío = default solo en anthropic
 OLLAMA_MODEL="kimi-k2.7-code:cloud"   # modelo cuando --provider ollama (--ollama-model lo overridea)
+CODEX_CAVEMAN_MODE="${CODEX_CAVEMAN_MODE:-auto}" # auto | off | lite | full | ultra | wenyan
 MAX_ITERATIONS=0   # 0 = sin límite duro; el freno real es no_progress_threshold
 MAX_TURNS=40
+# Fases por iteración (ver §"Contrato de fases" en skills/shared/loop-next-task/SKILL.md):
+#   split  (default) — dos invocaciones: SELECT (elige la tarea) → EXEC (la ejecuta). Cada fase
+#           corre con SU agente y por lo tanto con el modelo declarado en el frontmatter de ese
+#           agente: haiku para elegir, sonnet/opus para ejecutar según ceremony level.
+#   single — una sola invocación con $SELECT_AGENT haciendo todo (comportamiento previo al
+#           2026-07-27). Escape hatch: si el hand-off entre fases falla, esto sigue funcionando.
+PHASES="split"
+SELECT_AGENT="meta-router"      # fase SELECT: clasificar/elegir, no ejecutar (haiku por frontmatter)
+FALLBACK_EXEC_AGENT="dev-senior-backend"  # si SELECT no designa un agente válido para EXEC
+SELECT_MAX_TURNS=15             # SELECT sólo lee y decide: no necesita el presupuesto de EXEC
 NO_PROGRESS_THRESHOLD=2
+# Terminaciones anormales consecutivas (max-turns o salida sin marcador NEXT-TASK) antes de cortar.
+# Más bajo que NO_PROGRESS_THRESHOLD a propósito: una anormal cuesta el presupuesto completo de
+# turnos sin entregar nada, así que conviene cortar antes que ante una iteración que cierra limpio.
+ABNORMAL_THRESHOLD=2
+# Raíz del lab. $DEVY_PATH es el contrato (ver ~/.zshrc), pero el script también se invoca desde
+# shells que no lo exportan: se deriva de la ubicación del propio script como fallback.
+LAB_ROOT="${DEVY_PATH:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
+# Directorio de traza por iteración. Vacío = sin traza (comportamiento previo).
+ITER_LOG_DIR="${ITER_LOG_DIR:-$LAB_ROOT/management/.loop-logs/$(date +%Y%m%d-%H%M%S)}"
 KILL_SWITCH="$ROOT/.loop-stop"
 DRY_RUN=false
 
@@ -96,21 +134,190 @@ while [[ $# -gt 0 ]]; do
     --ollama-model) OLLAMA_MODEL="$2"; shift 2 ;;
     --max-iterations) MAX_ITERATIONS="$2"; shift 2 ;;
     --max-turns) MAX_TURNS="$2"; shift 2 ;;
+    --phases) PHASES="$2"; shift 2 ;;
+    --select-agent) SELECT_AGENT="$2"; shift 2 ;;
+    --exec-agent) FALLBACK_EXEC_AGENT="$2"; shift 2 ;;
     --dry-run) DRY_RUN=true; shift ;;
     *) echo "Argumento desconocido: $1" >&2; exit 1 ;;
   esac
 done
 
-# --provider solo acepta anthropic|ollama; y si es ollama, el binario debe existir antes de iterar.
+codex_caveman_installed() {
+  local codex_home="${CODEX_HOME:-$HOME/.codex}"
+  local agents_home="${AGENTS_HOME:-$HOME/.agents}"
+  local skills_root
+
+  for skills_root in "$codex_home/skills" "$agents_home/skills"; do
+    [[ -f "$skills_root/caveman/SKILL.md" ]] && return 0
+    if find "$skills_root" -path '*/caveman/SKILL.md' -type f -print -quit 2>/dev/null | grep -q .; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+# --provider acepta anthropic|ollama|codex; el binario requerido se valida antes de iterar.
 case "$PROVIDER" in
-  anthropic|ollama) ;;
-  *) echo "Provider desconocido: '$PROVIDER' (usar anthropic|ollama)" >&2; exit 1 ;;
+  anthropic|ollama|codex) ;;
+  *) echo "Provider desconocido: '$PROVIDER' (usar anthropic|ollama|codex)" >&2; exit 1 ;;
 esac
 if [[ "$PROVIDER" == "ollama" ]] && ! command -v ollama >/dev/null 2>&1; then
   echo "--provider ollama pero 'ollama' no está en el PATH" >&2; exit 1
 fi
+if [[ "$PROVIDER" == "codex" ]]; then
+  # CODEX_BIN permite usar la instalación del plugin de VS Code aunque su directorio
+  # no haya sido exportado al shell interactivo. Se mantiene command -v como primera
+  # opción para no alterar instalaciones normales.
+  if [[ -n "${CODEX_BIN:-}" ]]; then
+    if [[ ! -x "$CODEX_BIN" ]]; then
+      echo "CODEX_BIN no apunta a un ejecutable: $CODEX_BIN" >&2; exit 1
+    fi
+  else
+    CODEX_BIN="$(command -v codex 2>/dev/null || true)"
+    if [[ -z "$CODEX_BIN" ]]; then
+      for candidate in "$HOME/.local/bin/codex" "$HOME/.cargo/bin/codex"; do
+        if [[ -x "$candidate" ]]; then
+          CODEX_BIN="$candidate"
+          break
+        fi
+      done
+    fi
+    if [[ -z "$CODEX_BIN" ]]; then
+      CODEX_BIN="$(find "$HOME/.vscode-server/extensions" "$HOME/.vscode/extensions" \
+        -type f -path '*/openai.chatgpt-*/bin/*/codex' -perm -111 -print -quit 2>/dev/null || true)"
+    fi
+    if [[ -z "$CODEX_BIN" ]]; then
+      echo "--provider codex pero 'codex' no está en el PATH; definí CODEX_BIN=/ruta/al/binario/codex" >&2
+      exit 1
+    fi
+  fi
+  export CODEX_BIN
+fi
+if [[ "$PROVIDER" == "codex" && -z "$MODEL" ]]; then
+  echo "--provider codex requiere --model (ej. --model gpt-5.6-luna)" >&2; exit 1
+fi
+case "$PHASES" in
+  split|single) ;;
+  *) echo "Fases desconocidas: '$PHASES' (usar split|single)" >&2; exit 1 ;;
+esac
+case "$CODEX_CAVEMAN_MODE" in
+  auto|off|lite|full|ultra|wenyan) ;;
+  *) echo "CODEX_CAVEMAN_MODE inválido: '$CODEX_CAVEMAN_MODE' (usar auto|off|lite|full|ultra|wenyan)" >&2; exit 1 ;;
+esac
+if [[ "$PROVIDER" == "codex" && "$CODEX_CAVEMAN_MODE" == "auto" ]]; then
+  if codex_caveman_installed; then
+    CODEX_CAVEMAN_MODE="full"
+  else
+    CODEX_CAVEMAN_MODE="off"
+    echo "[loop-runner] Caveman no instalado en CODEX_HOME ni AGENTS_HOME; Codex continúa sin activación de estilo" >&2
+  fi
+fi
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 log() { printf '[loop-runner] %s\n' "$1"; }
+
+# El runner habla de "anthropic"; el dispatcher, de "claude". Mismo backing, distinto vocabulario.
+dispatch_provider() {
+  case "$PROVIDER" in
+    anthropic) echo "claude" ;;
+    *) echo "$PROVIDER" ;;
+  esac
+}
+
+# Modelo que le corresponde a una invocación.
+#   - Sin --model: NO se pasa nada y el dispatcher lo resuelve del frontmatter del agente
+#     (haiku para orquestadores, sonnet para ejecución, opus para gates L4). Éste es el punto
+#     de rutear anthropic por el dispatcher: antes `claude -p` corría todo al mismo modelo.
+#   - Con --model: override explícito del owner, gana sobre el frontmatter (ej. para escapar de
+#     un pool sin créditos). Se aplica a TODAS las fases a propósito: es un override de emergencia.
+#   - ollama: el modelo lo fija --ollama-model; el frontmatter no aplica (el backing es global).
+dispatch_model_args() {
+  if [[ "$PROVIDER" == "ollama" ]]; then
+    printf '%s\n%s\n' "--model" "$OLLAMA_MODEL"
+  elif [[ -n "$MODEL" ]]; then
+    printf '%s\n%s\n' "--model" "$MODEL"
+  fi
+}
+
+# Corre UNA invocación a través de agent-dispatcher.py y devuelve el texto de salida del agente
+# ya desescapado.
+#
+# Por qué pasa por el dispatcher también en anthropic (2026-07-27): antes esta rama llamaba
+# `claude -p` directo, salteándose el dispatcher por completo. Consecuencia: no se cargaba el
+# frontmatter del agente, no se aplicaba el modelo declarado por agente, y toda la iteración
+# corría al precio del --model del loop (o del default de la config). El dispatcher es el único
+# lugar donde vive la resolución agente→modelo→contexto; tener una rama que lo evita es tener
+# dos mecanismos que divergen.
+#
+# El dispatcher emite JSON en una línea (con \n escapados). Se desescapa acá para que TODOS los
+# detectores de abajo (is_quota_block, has_terminal_marker, LOOP-SELECT) trabajen sobre texto
+# plano, igual que cuando la salida venía de `claude -p` directo. Antes de este cambio el path
+# codex grepeaba sobre el JSON crudo.
+# Resume una línea JSON del dispatcher en una línea legible. Función propia y no un `python3 -c`
+# inline dentro de un `log "...$(...)"`: ahí las comillas quedan triplemente anidadas (bash → $()
+# → python) y el escape se rompe en silencio.
+summarize_dispatch() {
+  python3 -c '
+import json, sys
+d = json.load(sys.stdin)
+print("@%s modelo=%s context_mode=%s pack=%sB" % (d["agent"], d["model"], d.get("context_mode"), d["context_bytes"]))
+'
+}
+
+dispatch_agent() {
+  local agent="$1" prompt="$2" turns="$3"
+  local args raw
+  args=(
+    python3 "$SCRIPT_DIR/agent-dispatcher.py"
+    --agent "$agent"
+    --provider "$(dispatch_provider)"
+    --execution-origin "$(dispatch_provider)"
+    --task "$prompt"
+    --cwd "$ROOT"
+    --max-turns "$turns"
+    --unattended
+  )
+  local model_arg
+  while IFS= read -r model_arg; do
+    [[ -n "$model_arg" ]] && args+=("$model_arg")
+  done < <(dispatch_model_args)
+  if [[ -n "$PROYECTO" ]]; then
+    args+=(--project "$PROYECTO")
+  fi
+  if [[ "$PROVIDER" == "codex" && "$CODEX_CAVEMAN_MODE" != "off" ]]; then
+    args+=(--codex-caveman "$CODEX_CAVEMAN_MODE")
+  fi
+
+  raw="$("${args[@]}" 2>&1 || true)"
+  printf '%s' "$raw" | unwrap_dispatch
+}
+
+# Extrae el texto del agente del JSON del dispatcher. Sin f-strings ni comillas dobles: este
+# heredoc-menos viaja dentro de comillas simples de bash y cualquier `\"` llegaría literal a
+# python (SyntaxError). Ya pasó dos veces en este archivo.
+unwrap_dispatch() {
+  python3 -c '
+import json, sys
+raw = sys.stdin.read()
+# Última línea que parsea como JSON del dispatcher; si ninguna parsea (traceback de python,
+# binario faltante, etc.) se devuelve el crudo para no perder el diagnóstico.
+for line in reversed(raw.splitlines()):
+    line = line.strip()
+    if not line.startswith("{"):
+        continue
+    try:
+        payload = json.loads(line)
+    except ValueError:
+        continue
+    if "status" in payload:
+        print(payload.get("output_tail", ""))
+        print("DISPATCH-STATUS: %s model=%s agent=%s" % (
+            payload["status"], payload.get("model"), payload.get("agent")))
+        sys.exit(0)
+print(raw)
+'
+}
 
 # Detecta el bloqueo de cuota de sesión de Claude Code en la salida de una invocación.
 # Formato observado: "You've hit your session limit · resets 1:20pm (America/Buenos_Aires)"
@@ -124,6 +331,44 @@ is_quota_block() {
 # switch models." El loop la trata como terminal (corta limpio), no como no-progreso.
 is_credits_exhausted() {
   echo "$1" | grep -qiE "out of usage credits"
+}
+
+# Detecta el tope de GASTO mensual/semanal — tercera condición distinta de las dos anteriores.
+# No trae hora de reset (no sirve dormir) y no se arregla con /model. Formato observado 2026-07-26:
+# "You've hit your monthly spend limit · raise it at claude.ai/settings/usage". Terminal.
+is_spend_limit() {
+  echo "$1" | grep -qiE "hit your (monthly|weekly|daily) spend limit"
+}
+
+# Detecta que la invocación murió por agotar el presupuesto de turnos ANTES de terminar la tarea.
+# Formato observado: "Error: Reached max turns (40)". Es una TERMINACIÓN ANORMAL: el agente quedó a
+# mitad de camino y puede haber dejado archivos a medio editar. Antes de este chequeo el loop no la
+# distinguía de una iteración sana — y si el agente alcanzó a escribir algo, el hash de estado
+# cambiaba y se registraba como "progreso detectado", reseteando la racha de no-progreso.
+is_max_turns() {
+  echo "$1" | grep -qiE "Reached max turns"
+}
+
+# La skill loop-next-task cierra SIEMPRE con un marcador terminal explícito
+# (`NEXT-TASK: done|empty|blocked ...`). Su ausencia significa que la invocación no llegó a
+# cerrar la tarea: murió por turnos, por error del CLI, o por un crash del agente.
+# Es la única señal confiable de "la iteración terminó lo que empezó".
+has_terminal_marker() {
+  echo "$1" | grep -qE "NEXT-TASK: (done|empty|blocked)"
+}
+
+# ¿Quedaron cambios sin commitear en los repos que el loop puede tocar? Se usa sólo para AVISAR
+# tras una terminación anormal: un working tree sucio después de que el agente murió a mitad de
+# tarea es la señal de trabajo a medias que la próxima iteración va a heredar sin saberlo.
+dirty_repos() {
+  local r out=""
+  for r in "$LAB_ROOT/management" "$LAB_ROOT"/active/mercado-cercano/services/*/ "$LAB_ROOT/infra/api-gateway"; do
+    [[ -d "$r/.git" ]] || continue
+    if [[ -n "$(git -C "$r" status --porcelain 2>/dev/null)" ]]; then
+      out+="$(basename "$r") "
+    fi
+  done
+  echo "$out"
 }
 
 # Duerme hasta el horario de reset reportado por Claude Code (+60s de margen), en tramos de
@@ -202,11 +447,31 @@ state_hash() {
 
 if [[ "$DRY_RUN" == true ]]; then
   log "DRY RUN — no se ejecuta la invocación real, solo se valida el driver"
-  if [[ "$PROVIDER" == "ollama" ]]; then
-    log "provider=ollama — invocaría: ollama launch claude --model $OLLAMA_MODEL -- -p <PROMPT> --max-turns $MAX_TURNS --dangerously-skip-permissions"
-  else
-    log "provider=anthropic — invocaría: claude -p <PROMPT>${MODEL:+ --model $MODEL} --max-turns $MAX_TURNS --dangerously-skip-permissions"
+  log "provider=$PROVIDER (dispatcher: $(dispatch_provider)) · fases=$PHASES"
+  if [[ "$PROVIDER" == "codex" ]]; then
+    log "codex executable: $CODEX_BIN"
+    log "codex caveman: $CODEX_CAVEMAN_MODE"
   fi
+  if [[ -n "$MODEL" || "$PROVIDER" == "ollama" ]]; then
+    log "modelo: override explícito ($(dispatch_model_args | tail -1)) — pisa el frontmatter en todas las fases"
+  else
+    log "modelo: resuelto por agente desde el frontmatter (agent-dispatcher.py)"
+  fi
+  # Resolución real de agente→modelo→tamaño de contexto, sin ejecutar el agente.
+  if [[ "$PHASES" == "split" ]]; then
+    dry_agents=("$SELECT_AGENT" "$FALLBACK_EXEC_AGENT")
+    dry_labels=("SELECT" "EXEC (fallback; el real lo designa SELECT)")
+  else
+    dry_agents=("$SELECT_AGENT")
+    dry_labels=("fase única")
+  fi
+  for i in "${!dry_agents[@]}"; do
+    dry_args=(python3 "$SCRIPT_DIR/agent-dispatcher.py" --agent "${dry_agents[$i]}"
+              --provider "$(dispatch_provider)" --task "<PROMPT>" --cwd "$ROOT" --dry-run)
+    while IFS= read -r a; do [[ -n "$a" ]] && dry_args+=("$a"); done < <(dispatch_model_args)
+    [[ -n "$PROYECTO" ]] && dry_args+=(--project "$PROYECTO")
+    log "fase ${dry_labels[$i]} → $("${dry_args[@]}" | summarize_dispatch)"
+  done
   if [[ -f "$KILL_SWITCH" ]]; then
     log "kill-switch .loop-stop presente → 0 iteraciones"
     exit 0
@@ -240,33 +505,126 @@ while true; do
   # cwd cae dentro de un proyecto (ej. un servicio de mercado-cercano), el meta-router puede
   # filtrar por proyecto=mercado-cercano en vez del proyecto real que --proyecto pide
   # explícitamente. Pasarlo siempre que se conozca de antemano, no confiar en la inferencia.
-  PROMPT="@meta-router next-task --roadmap $ROADMAP_GLOB"
+  # NO invocar `@meta-router`: ese agente tiene SOLO la tool `Skill` (ver agents/orchestrators/
+  # meta-router.md) y por lo tanto no puede leer archivos, correr comandos ni editar la épica —
+  # es estructuralmente incapaz de ejecutar la tarea. Observado 2026-07-26: las dos iteraciones
+  # reportaron "el agente meta-router no tiene acceso a Bash/Read, así que terminé el ciclo yo
+  # mismo"; el trabajo salió bien pero fuera de la skill, y por eso ninguna emitió el marcador
+  # terminal `NEXT-TASK:` que §5.4 exige. Se invoca la skill directamente, en un contexto que sí
+  # tiene tools.
+  # Reset explícito: bash conserva estas variables entre vueltas del while, y una iteración que
+  # no despacha EXEC heredaría el output de la anterior en el log de traza.
+  select_output=""; exec_output=""; sel_agente=""; sel_epica=""; sel_tarea=""
+  sel_ceremony=""; sel_proyecto=""; select_line=""
+
+  scope_prompt="Roadmap: $ROADMAP_GLOB."
   if [[ -n "$PROYECTO" ]]; then
-    PROMPT="$PROMPT --proyecto $PROYECTO"
+    scope_prompt="$scope_prompt Proyecto: $PROYECTO."
   fi
   if [[ -n "$EPICA" ]]; then
-    PROMPT="$PROMPT --epica $EPICA"
+    scope_prompt="$scope_prompt Épica fijada: $EPICA."
   fi
-  log "iteración $iteration — invocando '$PROMPT' (provider=$PROVIDER, contexto fresco, --max-turns $MAX_TURNS)"
 
-  # Misma tarea, distinto backing. anthropic = comportamiento histórico (claude -p directo).
-  # ollama = Claude Code lanzado por `ollama launch` apuntando al endpoint de Ollama; el `-p` viaja
-  # como arg extra tras `--`, así que corre igual de headless y su stdout se captura igual.
-  if [[ "$PROVIDER" == "ollama" ]]; then
-    output="$(ollama launch claude --model "$OLLAMA_MODEL" -- -p "$PROMPT" --max-turns "$MAX_TURNS" --dangerously-skip-permissions 2>&1 || true)"
-  elif [[ -n "$MODEL" ]]; then
-    # --model fijado: comportamiento anthropic con modelo explícito (rama aparte para no romper
-    # en bash 3.2 con set -u, donde un array vacío interpolado tira "unbound variable").
-    output="$(claude -p "$PROMPT" --model "$MODEL" --max-turns "$MAX_TURNS" --dangerously-skip-permissions 2>&1 || true)"
+  if [[ "$PHASES" == "single" ]]; then
+    # Escape hatch: una sola invocación hace selección + ejecución + cierre.
+    PROMPT="Usá la skill loop-next-task para ejecutar la próxima tarea desbloqueada. $scope_prompt"
+    PROMPT="$PROMPT Seguí la skill al pie de la letra, incluido §5.4:"
+    PROMPT="$PROMPT terminá SIEMPRE con la línea 'NEXT-TASK: done|empty|blocked <detalle>',"
+    PROMPT="$PROMPT incluso si la tarea no cerró."
+    log "iteración $iteration — fase única con @$SELECT_AGENT (provider=$PROVIDER, --max-turns $MAX_TURNS)"
+    output="$(dispatch_agent "$SELECT_AGENT" "$PROMPT" "$MAX_TURNS")"
+    echo "$output"
   else
-    output="$(claude -p "$PROMPT" --max-turns "$MAX_TURNS" --dangerously-skip-permissions 2>&1 || true)"
+    # -------------------------------------------------------------------------------------------
+    # FASE 1 — SELECT. Elegir la tarea, NO ejecutarla.
+    # Corre con @meta-router → haiku por frontmatter: clasificar y rutear es determinístico, no
+    # necesita un modelo de razonamiento. Su contexto mínimo es el índice del roadmap + la lista
+    # de tareas de la épica; no toca código.
+    # -------------------------------------------------------------------------------------------
+    PROMPT="Usá la skill loop-next-task en MODO SELECT (fase 1 de 2). $scope_prompt"
+    PROMPT="$PROMPT Tu trabajo es ELEGIR la próxima tarea desbloqueada y designar quién la ejecuta."
+    PROMPT="$PROMPT NO ejecutes la tarea, NO edites código, NO marqués ningún [x]."
+    PROMPT="$PROMPT Terminá con EXACTAMENTE UNA de estas dos líneas, como última línea del output:"
+    PROMPT="$PROMPT 'LOOP-SELECT: proyecto=<p> epica=<KEY-ENN> tarea=<id> ceremony=<L1|L2|L3|L4> agente=<agente-canonico>'"
+    PROMPT="$PROMPT o bien 'NEXT-TASK: empty|blocked <detalle>' si no hay tarea ejecutable."
+    log "iteración $iteration — fase SELECT con @$SELECT_AGENT (provider=$PROVIDER, --max-turns $SELECT_MAX_TURNS)"
+    select_output="$(dispatch_agent "$SELECT_AGENT" "$PROMPT" "$SELECT_MAX_TURNS")"
+    echo "$select_output"
+    output="$select_output"
+
+    # Una terminal en SELECT (empty/blocked/cuota/créditos) baja sin gastar la fase EXEC: los
+    # chequeos de abajo la ven en $output y cortan igual que siempre.
+    if ! echo "$select_output" | grep -qE "NEXT-TASK: (empty|blocked)" \
+       && ! is_quota_block "$select_output" && ! is_credits_exhausted "$select_output" \
+       && ! is_spend_limit "$select_output"; then
+      select_line="$(echo "$select_output" | grep -oE "LOOP-SELECT:[^\\\\\"]*" | tail -1 || true)"
+      if [[ -z "$select_line" ]]; then
+        # Sin LOOP-SELECT y sin marcador terminal: SELECT murió a mitad. NO se despacha EXEC —
+        # ejecutar sin saber qué tarea se eligió es exactamente el modo de fallo que el loop
+        # viene tratando de eliminar. Cae como terminación anormal en la clasificación de abajo.
+        log "⚠ fase SELECT no emitió LOOP-SELECT ni marcador terminal → no se despacha EXEC"
+      else
+        sel_epica="$(echo "$select_line" | grep -oE 'epica=[^ ]+' | cut -d= -f2 || true)"
+        sel_tarea="$(echo "$select_line" | grep -oE 'tarea=[^ ]+' | cut -d= -f2 || true)"
+        sel_ceremony="$(echo "$select_line" | grep -oE 'ceremony=[^ ]+' | cut -d= -f2 || true)"
+        sel_proyecto="$(echo "$select_line" | grep -oE 'proyecto=[^ ]+' | cut -d= -f2 || true)"
+        sel_agente="$(echo "$select_line" | grep -oE 'agente=[^ ]+' | cut -d= -f2 || true)"
+        # Un agente designado que no existe haría fallar el dispatcher con "Agente no encontrado"
+        # y quemaría la iteración entera. Se valida antes y se cae al fallback avisando.
+        if [[ -z "$sel_agente" ]] || ! grep -rqE "^name:[[:space:]]*$sel_agente[[:space:]]*$" "$LAB_ROOT/management/agents" 2>/dev/null; then
+          log "⚠ agente designado por SELECT inválido o ausente ('${sel_agente:-<vacío>}') → usando $FALLBACK_EXEC_AGENT"
+          sel_agente="$FALLBACK_EXEC_AGENT"
+        fi
+
+        # ---------------------------------------------------------------------------------------
+        # FASE 2 — EXEC. Ejecutar SÓLO la tarea que SELECT eligió.
+        # Corre con el agente designado → su modelo sale del frontmatter (sonnet para
+        # implementación, opus para L4/arquitectura). Su contexto mínimo es la tarea + el archivo
+        # de la épica + el PROJECT.md del proyecto dueño del código.
+        # ---------------------------------------------------------------------------------------
+        PROMPT="Usá la skill loop-next-task en MODO EXEC (fase 2 de 2). $scope_prompt"
+        PROMPT="$PROMPT La tarea YA fue elegida por la fase SELECT — no elijas otra:"
+        PROMPT="$PROMPT proyecto=$sel_proyecto epica=$sel_epica tarea=$sel_tarea ceremony=$sel_ceremony."
+        PROMPT="$PROMPT Ejecutala de punta a punta siguiendo §2 a §5 de la skill: verificá el"
+        PROMPT="$PROMPT criterio 'Hecho cuando', respetá §3bis (no cerrar con evidencia que una"
+        PROMPT="$PROMPT tarea anterior declaró insuficiente), marcá [x], actualizá roadmap.yaml y"
+        PROMPT="$PROMPT guardá el handoff con mem_save. Una sola tarea, no encadenes la siguiente."
+        PROMPT="$PROMPT Terminá SIEMPRE con la línea 'NEXT-TASK: done|checkpoint|blocked <detalle>',"
+        PROMPT="$PROMPT incluso si la tarea no cerró."
+        log "iteración $iteration — fase EXEC de $sel_epica.$sel_tarea ($sel_ceremony) con @$sel_agente (--max-turns $MAX_TURNS)"
+        exec_output="$(dispatch_agent "$sel_agente" "$PROMPT" "$MAX_TURNS")"
+        echo "$exec_output"
+        # El marcador terminal que el runner evalúa es SIEMPRE el de la fase que ejecutó.
+        output="$exec_output"
+      fi
+    fi
   fi
-  echo "$output"
 
   # Créditos agotados: TERMINAL. A diferencia del session-limit no hay reset horario que esperar →
   # cortar limpio, sin dormir y sin sumar a la racha de no-progreso (que cortaría igual pero con un
   # mensaje engañoso de "sin cambios"). El owner recarga con /usage-credits o cambia de modelo con
   # /model y relanza el loop. Se chequea ANTES que is_quota_block (mensajes mutuamente excluyentes).
+  # Traza de auditoría: sin esto, la salida de cada iteración se pierde si nadie mira la consola,
+  # y no hay forma de reconstruir por qué una tarea quedó como quedó.
+  if [[ -n "${ITER_LOG_DIR:-}" ]]; then
+    mkdir -p "$ITER_LOG_DIR"
+    # Las DOS fases van al log, no sólo la que define el marcador terminal: cuando una iteración
+    # sale mal, la mitad de las veces la causa está en la selección, no en la ejecución.
+    {
+      if [[ "$PHASES" == "split" ]]; then
+        printf '===== FASE SELECT (@%s) =====\n%s\n' "$SELECT_AGENT" "${select_output:-<no corrió>}"
+        printf '\n===== FASE EXEC (@%s) =====\n%s\n' "${sel_agente:-<no despachada>}" "${exec_output:-<no corrió>}"
+      else
+        printf '%s\n' "$output"
+      fi
+    } > "$ITER_LOG_DIR/iter-$(printf '%03d' "$iteration").log"
+  fi
+
+  if is_spend_limit "$output"; then
+    log "tope de gasto alcanzado (no hay reset horario que esperar) → deteniendo. Subilo en claude.ai/settings/usage y relanzá el loop."
+    break
+  fi
+
   if is_credits_exhausted "$output"; then
     log "créditos de uso agotados (sin reset horario) → deteniendo. Recargá con /usage-credits o cambiá de modelo con /model, y relanzá el loop."
     break
@@ -297,17 +655,66 @@ while true; do
     break
   fi
 
+  # ---------------------------------------------------------------------------------------------
+  # Clasificación de la terminación ANTES de mirar el disco.
+  #
+  # El bug que esto arregla: el loop sólo comparaba el hash de estado. Si el agente moría por
+  # turnos habiendo alcanzado a escribir algo, el hash cambiaba y se registraba "progreso
+  # detectado" — reseteando la racha de no-progreso y dejando que el loop siguiera sobre una
+  # tarea a medio hacer. Un cambio en disco NO es evidencia de que la tarea se completó; el
+  # marcador `NEXT-TASK: done` sí.
+  # ---------------------------------------------------------------------------------------------
+  abnormal=0
+  abnormal_reason=""
+  if is_max_turns "$output"; then
+    abnormal=1
+    abnormal_reason="agotó el presupuesto de $MAX_TURNS turnos sin cerrar la tarea"
+  elif ! has_terminal_marker "$output"; then
+    abnormal=1
+    abnormal_reason="terminó sin marcador NEXT-TASK (crash, error del CLI o salida truncada)"
+  fi
+
   new_hash="$(state_hash)"
+
+  if [[ "$abnormal" -eq 1 ]]; then
+    abnormal_streak=$(( ${abnormal_streak:-0} + 1 ))
+    log "⚠ TERMINACIÓN ANORMAL: $abnormal_reason (racha anormal: $abnormal_streak/$ABNORMAL_THRESHOLD)"
+    if [[ "$new_hash" != "$prev_hash" ]]; then
+      log "⚠ hubo cambios en disco SIN marcador de cierre → hay trabajo a medias que la próxima"
+      log "  iteración va a heredar sin saberlo. Revisá antes de reanudar."
+      dirty="$(dirty_repos)"
+      [[ -n "$dirty" ]] && log "  repos con cambios sin commitear: $dirty"
+    fi
+    # Una terminación anormal NUNCA cuenta como progreso, haya escrito o no.
+    no_progress_streak=$((no_progress_streak + 1))
+    if [[ "$abnormal_streak" -ge "$ABNORMAL_THRESHOLD" ]]; then
+      log "$ABNORMAL_THRESHOLD terminaciones anormales consecutivas → deteniendo."
+      log "  Probable causa: la tarea no entra en $MAX_TURNS turnos. Subí el presupuesto con"
+      log "  --max-turns, o trocéala en la épica. Revisá $ITER_LOG_DIR para ver dónde murió."
+      prev_hash="$new_hash"
+      break
+    fi
+    if [[ "$no_progress_streak" -ge "$NO_PROGRESS_THRESHOLD" ]]; then
+      log "$NO_PROGRESS_THRESHOLD iteraciones consecutivas sin progreso → deteniendo"
+      prev_hash="$new_hash"
+      break
+    fi
+    prev_hash="$new_hash"
+    continue
+  fi
+
+  abnormal_streak=0
+
   if [[ "$new_hash" == "$prev_hash" ]]; then
     no_progress_streak=$((no_progress_streak + 1))
-    log "sin cambios en roadmap/épicas esta iteración (racha: $no_progress_streak/$NO_PROGRESS_THRESHOLD)"
+    log "cerró limpio pero sin cambios en roadmap/épicas (racha: $no_progress_streak/$NO_PROGRESS_THRESHOLD)"
     if [[ "$no_progress_streak" -ge "$NO_PROGRESS_THRESHOLD" ]]; then
       log "$NO_PROGRESS_THRESHOLD iteraciones consecutivas sin progreso → deteniendo"
       break
     fi
   else
     no_progress_streak=0
-    log "progreso detectado (hash de estado cambió)"
+    log "progreso confirmado (marcador NEXT-TASK + cambio de estado)"
   fi
   prev_hash="$new_hash"
 done
