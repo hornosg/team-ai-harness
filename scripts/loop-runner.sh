@@ -138,6 +138,15 @@ NO_PROGRESS_THRESHOLD=2
 # Más bajo que NO_PROGRESS_THRESHOLD a propósito: una anormal cuesta el presupuesto completo de
 # turnos sin entregar nada, así que conviene cortar antes que ante una iteración que cierra limpio.
 ABNORMAL_THRESHOLD=2
+# Muerte por --max-turns: umbral propio, MÁS BAJO, porque no es el mismo tipo de fallo.
+#
+# Un crash del CLI o una salida truncada pueden ser transitorios: reintentar tiene sentido. Agotar
+# el presupuesto de turnos es DETERMINÍSTICO — la misma tarea, con el mismo presupuesto y el mismo
+# contexto fresco, vuelve a agotarlo. Reintentar sólo compra otro presupuesto completo tirado.
+#
+# Medido en PLAT-E39.T1 (2026-07-27): 40 turnos de sonnet con la épica entera en contexto, sin
+# producir un solo archivo. Con el umbral común de 2, eso se pagaba dos veces antes de avisar.
+MAX_TURNS_THRESHOLD=1
 # Raíz del lab. $DEVY_PATH es el contrato (ver ~/.zshrc), pero el script también se invoca desde
 # shells que no lo exportan: se deriva de la ubicación del propio script como fallback.
 LAB_ROOT="${DEVY_PATH:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
@@ -778,6 +787,7 @@ fi
 iteration=0
 invocations=0
 no_progress_streak=0
+max_turns_streak=0
 prev_hash="$(state_hash)"
 
 while true; do
@@ -1060,10 +1070,30 @@ while true; do
     fi
     # Una terminación anormal NUNCA cuenta como progreso, haya escrito o no.
     no_progress_streak=$((no_progress_streak + 1))
+
+    # La muerte por turnos corta con su propio umbral: reintentarla es determinísticamente inútil.
+    if is_max_turns "$output"; then
+      max_turns_streak=$(( ${max_turns_streak:-0} + 1 ))
+      if [[ "$max_turns_streak" -ge "$MAX_TURNS_THRESHOLD" ]]; then
+        log "la tarea NO entra en $MAX_TURNS turnos → deteniendo sin reintentar."
+        log "  Reintentar con el mismo presupuesto vuelve a agotarlo: el fallo es determinístico,"
+        log "  no transitorio. Dos salidas:"
+        log "    · subir el presupuesto:  --max-turns $((MAX_TURNS * 2))"
+        log "    · trocear la tarea en la épica (skills/dev/atomic-session-planning)"
+        log "  Si la tarea mezcla varias cosas con criterios de aceptación distintos, trocear es"
+        log "  lo correcto — más presupuesto sólo compra un fallo más caro."
+        log "  Traza: $ITER_LOG_DIR"
+        prev_hash="$new_hash"
+        write_iter_log
+        break
+      fi
+    else
+      max_turns_streak=0
+    fi
+
     if [[ "$abnormal_streak" -ge "$ABNORMAL_THRESHOLD" ]]; then
       log "$ABNORMAL_THRESHOLD terminaciones anormales consecutivas → deteniendo."
-      log "  Probable causa: la tarea no entra en $MAX_TURNS turnos. Subí el presupuesto con"
-      log "  --max-turns, o trocéala en la épica. Revisá $ITER_LOG_DIR para ver dónde murió."
+      log "  Causa probable: crash del CLI o salida truncada. Revisá $ITER_LOG_DIR."
       prev_hash="$new_hash"
       break
     fi

@@ -348,6 +348,14 @@ El loop termina (limpio) cuando:
 - **Racha de terminaciones anormales** — 2 seguidas (`ABNORMAL_THRESHOLD`) → corta. Es más bajo
   que el umbral de no-progreso a propósito: una anormal cuesta el presupuesto completo de turnos
   sin entregar nada.
+- **Muerte por `--max-turns`** — corta a la **primera** (`MAX_TURNS_THRESHOLD=1`), sin reintentar.
+  No es el mismo fallo que un crash: agotar el presupuesto es **determinístico**, así que la misma
+  tarea con el mismo presupuesto y contexto fresco vuelve a agotarlo. Reintentar sólo compra otro
+  presupuesto tirado. Medido en PLAT-E39.T1: 40 turnos de sonnet sin producir un archivo.
+
+  El mensaje ofrece las dos salidas reales — subir `--max-turns` o **trocear la tarea**. Si la
+  tarea mezcla varias cosas con criterios de aceptación distintos, trocear es lo correcto: más
+  presupuesto sólo compra un fallo más caro.
 - **`--max-iterations`** alcanzado (si se pasó > 0).
 - **Kill-switch** — si aparece el archivo `.loop-stop` en el cwd, corta antes de la próxima
   iteración (freno manual, también se respeta durante la espera de cuota).
