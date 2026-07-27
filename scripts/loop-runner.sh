@@ -326,6 +326,75 @@ prompt_signoff() {
   esac
 }
 
+# Corre el gate L4 completo: REVIEW de seguridad → sign-off del owner → registro en disco.
+#
+# Se invoca desde DOS lugares, y esa es la razón de que sea una función:
+#   a) después de EXEC, sobre trabajo recién hecho (plan escrito o diff implementado);
+#   b) cuando SELECT reporta que la épica está frenada por un gate L4 que quedó pendiente de una
+#      iteración anterior — el caso de PLAT-E39, donde el plan ya existía desde antes.
+#
+# Devuelve 0 si el gate quedó APROBADO (el loop puede seguir), 1 si no (el loop corta).
+run_l4_gate() {
+  local epica="$1" tarea="$2" contexto="$3"
+
+  [[ -n "$SECURITY_AGENT" ]] || { log "  fase REVIEW desactivada (--no-security-review) → no se puede pasar el gate"; return 1; }
+
+  local prompt="Revisión de seguridad OBLIGATORIA del gate L4 (RULE-10). $scope_prompt"
+  prompt="$prompt Épica: $epica. Tarea/alcance: $tarea. $contexto"
+  prompt="$prompt Revisá la superficie de auth/identidad/money/PII/RLS: si lo que hay es un PLAN de"
+  prompt="$prompt épica, revisá el diseño y sus decisiones abiertas; si hay una tarea implementada,"
+  prompt="$prompt revisá el diff sin commitear en el repo del servicio."
+  prompt="$prompt Sos read-only: NO edites, NO commitees, NO 'arregles' — señalá."
+  prompt="$prompt Aplicá la skill owasp-top10. Sé concreto: archivo y línea cuando corresponda, y"
+  prompt="$prompt pronunciate sobre CADA decisión de diseño abierta que encuentres."
+  prompt="$prompt Terminá SIEMPRE con la línea 'SECURITY-REVIEW: ok|objeciones|bloqueante <resumen>'"
+  prompt="$prompt donde 'bloqueante' significa que NO debe aprobarse como está."
+
+  log "iteración $iteration — fase REVIEW L4 de $epica.$tarea con @$SECURITY_AGENT (--max-turns $REVIEW_MAX_TURNS)"
+  review_output="$(dispatch_agent "$SECURITY_AGENT" "$prompt" "$REVIEW_MAX_TURNS")"
+  echo "$review_output"
+  review_verdict="$(echo "$review_output" | grep -oE "SECURITY-REVIEW: (ok|objeciones|bloqueante)[^\\\\\"]*" | tail -1 || true)"
+  [[ -z "$review_verdict" ]] && review_verdict="SECURITY-REVIEW: <sin veredicto — la revisión no cerró>"
+
+  if echo "$review_verdict" | grep -q "bloqueante"; then
+    log "⚠ @$SECURITY_AGENT marcó BLOQUEANTE — no se ofrece sign-off"
+    write_signoff "NO APROBADO (bloqueante de seguridad)" "$epica" "$tarea" "$review_verdict" "$review_output" || true
+    return 1
+  fi
+
+  if [[ "$INTERACTIVE_SIGNOFF" != true || ! -t 0 ]]; then
+    # Desatendido: queda el análisis hecho y el owner decide fuera del loop.
+    write_signoff "PENDIENTE (corrida desatendida — sin sign-off)" "$epica" "$tarea" "$review_verdict" "$review_output" || true
+    [[ "$INTERACTIVE_SIGNOFF" == true ]] && log "  (--interactive-signoff pedido pero no hay TTY → queda PENDIENTE)"
+    return 1
+  fi
+
+  if ! prompt_signoff "$epica" "$tarea" "$review_verdict"; then
+    write_signoff "NO APROBADO" "$epica" "$tarea" "$review_verdict" "$review_output" || true
+    log "sign-off denegado por el owner"
+    return 1
+  fi
+
+  write_signoff "APROBADO" "$epica" "$tarea" "$review_verdict" "$review_output" || return 1
+
+  # El sign-off tiene que quedar reflejado en el archivo de la épica: si no, la próxima iteración
+  # vuelve a leer "Gate L4: ⏳ pendiente" y reporta blocked otra vez. @dev-security es read-only,
+  # así que la anotación la hace un agente con Write, sin ejecutar ninguna tarea.
+  local scribe="${sel_agente:-$FALLBACK_EXEC_AGENT}"
+  prompt="El owner APROBÓ el gate L4 de $epica ($tarea) el $(date '+%Y-%m-%d %H:%M')."
+  prompt="$prompt Veredicto de @$SECURITY_AGENT: $review_verdict."
+  prompt="$prompt Tu ÚNICA tarea es registrar ese sign-off en el archivo de la épica: actualizá el"
+  prompt="$prompt encabezado del gate (y el guardrail final si lo repite) de '⏳ pendiente' a"
+  prompt="$prompt 'aprobado <fecha>', citando el archivo de respaldo en management/escalations/."
+  prompt="$prompt NO ejecutes ninguna tarea de la épica, NO marqués ningún [x], NO commitees."
+  prompt="$prompt Terminá con la línea 'NEXT-TASK: checkpoint $epica — gate L4 aprobado y registrado'."
+  log "  registrando el sign-off en el archivo de la épica con @$scribe"
+  local scribe_output
+  scribe_output="$(dispatch_agent "$scribe" "$prompt" 12)"
+  echo "$scribe_output"
+  return 0
+}
+
 dispatch_agent() {
   local agent="$1" prompt="$2" turns="$3"
   local args raw
@@ -423,6 +492,21 @@ has_terminal_marker() {
   # "terminó sin marcador NEXT-TASK", sumó a la racha anormal y avisó de trabajo a medias
   # inexistente. El dispatcher ya lo clasificaba bien; el desalineado era este grep.
   echo "$1" | grep -qE "NEXT-TASK: (done|empty|blocked|checkpoint)"
+}
+
+# ¿El `blocked` de SELECT es un gate L4 esperando revisión/sign-off, o un bloqueo real?
+#
+# La distinción es la que destraba el deadlock encontrado el 2026-07-27 en PLAT-E39: la fase
+# REVIEW corría sólo después de EXEC, pero cuando el gate L4 ya está pendiente de una iteración
+# ANTERIOR, SELECT devuelve `blocked` y EXEC nunca corre — así que la revisión que destrabaría el
+# gate no se disparaba nunca. El gate esperaba a la revisión y la revisión esperaba al gate.
+#
+# Un `depende_de:` sin cumplir es otra cosa: ahí no hay nada que revisar, falta que otra épica se
+# complete. Por eso se exige mención explícita de gate/sign-off/revisión Y ausencia de `depende_de`.
+is_l4_gate_block() {
+  echo "$1" | grep -q "NEXT-TASK: blocked" || return 1
+  echo "$1" | grep -qi "depende_de pendiente" && return 1
+  echo "$1" | grep -qiE "gate L4|sign-off|signoff|revisión (arquitectural|de seguridad)|pending-review"
 }
 
 # ¿El checkpoint requiere acción del OWNER, o es sólo una pausa de presupuesto?
@@ -707,45 +791,12 @@ while true; do
         # -----------------------------------------------------------------------------------
         if [[ "$sel_ceremony" == "L4" && -n "$SECURITY_AGENT" ]] \
            && ! echo "$exec_output" | grep -q "NEXT-TASK: blocked"; then
-          PROMPT="Revisión de seguridad OBLIGATORIA del gate L4 (RULE-10). $scope_prompt"
-          PROMPT="$PROMPT Tarea: $sel_epica.$sel_tarea (ceremony L4), ejecutada por @$sel_agente."
-          PROMPT="$PROMPT Revisá lo que esa iteración dejó: si escribió un plan de épica, revisá el"
-          PROMPT="$PROMPT DISEÑO (superficie de auth/identidad/money/PII/RLS, decisiones abiertas);"
-          PROMPT="$PROMPT si implementó una tarea, revisá el DIFF sin commitear en el repo del"
-          PROMPT="$PROMPT servicio. Sos read-only: NO edites, NO commitees, NO 'arregles' — señalá."
-          PROMPT="$PROMPT Aplicá la skill owasp-top10. Sé concreto: archivo y línea cuando corresponda."
-          PROMPT="$PROMPT Terminá SIEMPRE con la línea 'SECURITY-REVIEW: ok|objeciones|bloqueante <resumen>'"
-          PROMPT="$PROMPT donde 'bloqueante' significa que NO debe aprobarse como está."
-          log "iteración $iteration — fase REVIEW L4 de $sel_epica.$sel_tarea con @$SECURITY_AGENT (--max-turns $REVIEW_MAX_TURNS)"
-          review_output="$(dispatch_agent "$SECURITY_AGENT" "$PROMPT" "$REVIEW_MAX_TURNS")"
-          echo "$review_output"
-          review_verdict="$(echo "$review_output" | grep -oE "SECURITY-REVIEW: (ok|objeciones|bloqueante)[^\\\\\"]*" | tail -1 || true)"
-          [[ -z "$review_verdict" ]] && review_verdict="SECURITY-REVIEW: <sin veredicto — la revisión no cerró>"
-
-          # Sign-off del owner. Sólo con --interactive-signoff Y terminal: sin TTY un `read` cuelga
-          # el proceso para siempre, que es el peor modo de fallo posible para un runner autónomo.
-          if [[ "$INTERACTIVE_SIGNOFF" == true && -t 0 ]]; then
-            if echo "$review_verdict" | grep -q "bloqueante"; then
-              log "⚠ @$SECURITY_AGENT marcó BLOQUEANTE — no se ofrece sign-off"
-              write_signoff "NO APROBADO (bloqueante de seguridad)" "$sel_epica" "$sel_tarea" "$review_verdict" "$review_output" || true
-              log "épica $EPICA frenada por revisión de seguridad bloqueante → deteniendo"
-              break
-            fi
-            if prompt_signoff "$sel_epica" "$sel_tarea" "$review_verdict"; then
-              if write_signoff "APROBADO" "$sel_epica" "$sel_tarea" "$review_verdict" "$review_output"; then
-                log "✓ sign-off del owner registrado — la próxima iteración puede avanzar el gate"
-              else
-                break
-              fi
-            else
-              write_signoff "NO APROBADO" "$sel_epica" "$sel_tarea" "$review_verdict" "$review_output" || true
-              log "sign-off denegado por el owner → deteniendo"
-              break
-            fi
+          if run_l4_gate "$sel_epica" "$sel_tarea" \
+               "Lo acaba de ejecutar @$sel_agente en esta misma iteración."; then
+            log "✓ gate L4 aprobado — la próxima iteración puede avanzar"
           else
-            # Modo desatendido: el veredicto queda escrito y el owner decide fuera del loop.
-            write_signoff "PENDIENTE (corrida desatendida — sin sign-off)" "$sel_epica" "$sel_tarea" "$review_verdict" "$review_output" || true
-            [[ "$INTERACTIVE_SIGNOFF" == true ]] && log "  (--interactive-signoff pedido pero no hay TTY → se registra y sigue el flujo normal)"
+            log "gate L4 no superado → deteniendo"
+            break
           fi
         fi
       fi
@@ -797,6 +848,34 @@ while true; do
     else
       log "backlog vacío reportado por la skill → deteniendo"
     fi
+    break
+  fi
+
+  # Gate L4 pendiente de una iteración ANTERIOR: SELECT reporta blocked porque el plan ya está
+  # escrito y espera revisión + sign-off. Ese bloqueo SÍ se puede levantar acá — es precisamente
+  # para lo que existe la fase REVIEW. Sin esto, el loop cortaba y la revisión nunca se disparaba
+  # (deadlock observado en PLAT-E39, 2026-07-27).
+  if is_l4_gate_block "$output" && [[ -n "$SECURITY_AGENT" ]]; then
+    gate_epica="${sel_epica:-${EPICA:-$(echo "$output" | grep -oE '[A-Z]{2,4}-E[0-9]+' | head -1)}}"
+    # Un gate por épica y por corrida. Si tras aprobarlo la épica vuelve a reportarse frenada por
+    # lo mismo, el registro del sign-off no surtió efecto: reintentar la revisión sería un bucle
+    # infinito quemando cupo sobre un archivo que nadie está actualizando.
+    if [[ " ${gates_run:-} " == *" $gate_epica "* ]]; then
+      log "épica $gate_epica sigue reportando gate L4 pendiente DESPUÉS de aprobarlo → deteniendo"
+      log "  El sign-off está en management/escalations/, pero el archivo de la épica no quedó"
+      log "  actualizado. Revisalo a mano antes de reanudar."
+      break
+    fi
+    gates_run="${gates_run:-} $gate_epica"
+    log "iteración $iteration — épica $gate_epica frenada por gate L4 pendiente → corriendo la revisión que lo destraba"
+    if run_l4_gate "${gate_epica:-desconocida}" "GATE" \
+         "El plan/trabajo ya existe de una iteración anterior y está esperando este gate."; then
+      log "✓ gate L4 aprobado y registrado — reanudando el loop"
+      prev_hash="$(state_hash)"
+      no_progress_streak=0
+      continue
+    fi
+    log "gate L4 no superado → deteniendo"
     break
   fi
 

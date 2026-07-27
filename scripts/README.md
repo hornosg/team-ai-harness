@@ -68,6 +68,22 @@ agente:
 RULE-10 siempre exigió `@dev-security` en L4, pero dependía de que el agente ejecutor se acordara
 de invocarlo. Desde 2026-07-27 es una fase del runner: si el ceremony es L4, la revisión **ocurre**.
 
+Se dispara por **dos** caminos, y el segundo es el que importa en la práctica:
+
+1. **Después de EXEC**, sobre trabajo recién hecho en esa iteración.
+2. **Cuando SELECT reporta `blocked` por un gate L4 que quedó pendiente** de una iteración
+   anterior — el plan ya está escrito y espera revisión. Sin este camino había un deadlock: el
+   gate esperaba a la revisión, EXEC nunca corría porque SELECT devolvía `blocked`, y la revisión
+   que destrabaría el gate no se disparaba nunca. Observado en PLAT-E39.
+
+Un `blocked` por `depende_de:` sin cumplir **no** dispara la revisión: ahí no hay nada que revisar,
+falta que otra épica se complete.
+
+Tras un sign-off aprobado, el runner despacha una anotación corta para dejar el gate marcado como
+aprobado en el archivo de la épica (`@dev-security` es read-only y no puede hacerlo). Si la épica
+vuelve a reportar el mismo gate después de aprobarlo, el runner **corta**: reintentar sería un
+bucle infinito sobre un archivo que nadie está actualizando.
+
 Con `--interactive-signoff` **y** TTY, el runner pregunta por consola:
 
 ```
