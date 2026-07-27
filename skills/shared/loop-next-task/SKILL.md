@@ -60,9 +60,33 @@ así que **cada fase corre con el modelo declarado en el frontmatter de su agent
 | **NO hace** | elegir otra tarea, encadenar la siguiente, re-litigar la selección |
 | **Devuelve** | `NEXT-TASK: done\|checkpoint\|blocked <proyecto>/<epica>.<tarea>` |
 
+### Fase 3 — REVIEW (sólo si `ceremony: L4`)
+
+| | |
+|---|---|
+| **Agente** | `@dev-security` (opus, **read-only** por frontmatter: puede señalar, no "arreglar") |
+| **Skill** | `dev/owasp-top10` |
+| **Cuándo** | ceremony L4 y EXEC no salió `blocked` |
+| **Qué revisa** | el **diseño** si EXEC escribió un plan de épica; el **diff sin commitear** si implementó una tarea |
+| **Devuelve** | `SECURITY-REVIEW: ok\|objeciones\|bloqueante <resumen>` |
+
+RULE-10 siempre exigió `@dev-security` en L4, pero hasta 2026-07-27 eso dependía de que el agente
+ejecutor se acordara de invocarlo. Cableada como fase del runner, la revisión **ocurre**.
+
+Después de REVIEW viene el sign-off del owner, que el runner ofrece por consola sólo con
+`--interactive-signoff` **y** TTY. Sin terminal no se pregunta nada: se registra el veredicto y el
+loop sigue su curso normal (nunca esperar input en headless — `reference/casos-borde.md` §D.5).
+Un `bloqueante` no ofrece sign-off: corta.
+
+Toda decisión — aprobada, denegada o pendiente — se escribe en
+`management/escalations/YYYY-MM-DD_<epica>-<tarea>-signoff.md` con el veredicto de seguridad
+completo. **El sign-off no es un keystroke: es un archivo.** Sin rastro de qué se aprobó y con qué
+análisis, el gate L4 se degrada a un trámite.
+
 **Qué se le pasa a la iteración siguiente**: nada en memoria. El estado viaja por disco (el `[x]`
-en la épica, el `estado:` en el roadmap) y por el handoff de Engram (§6). La iteración siguiente
-arranca en cero y vuelve a SELECT. Si algo tiene que sobrevivir, se escribe — no se recuerda.
+en la épica, el `estado:` en el roadmap, el archivo de sign-off) y por el handoff de Engram (§6).
+La iteración siguiente arranca en cero y vuelve a SELECT. Si algo tiene que sobrevivir, se
+escribe — no se recuerda.
 
 ## Precondición — roadmap único, partido en índice + descripciones
 

@@ -36,6 +36,10 @@ Desde 2026-07-27 cada iteración son **dos invocaciones** (`SELECT` → `EXEC`) 
 | `--ollama-model <id>` | `kimi-k2.7-code:cloud` | Modelo cuando `--provider ollama`. El backing es global, el frontmatter no aplica. |
 | `--phases split\|single` | `split` | `split` = dos invocaciones por iteración (SELECT → EXEC), cada una con su agente y su modelo. `single` = una sola invocación hace todo (comportamiento previo al 2026-07-27); escape hatch si el handoff entre fases falla. |
 | `--select-agent <a>` | `meta-router` | Agente de la fase SELECT. |
+| `--security-agent <a>` | `dev-security` | Agente de la fase REVIEW (sólo L4). |
+| `--no-security-review` | — | Desactiva la fase REVIEW. **No usar en L4 real**: RULE-10 la exige. |
+| `--interactive-signoff` | desactivado | Tras REVIEW, pregunta `¿Aprobás? [s/N]` por consola. **Sólo con TTY**: sin terminal se registra el veredicto y sigue, nunca cuelga. |
+| `--signoff-timeout N` | `600` | Segundos de espera de esa respuesta. Vencido = NO aprobado. |
 | `--exec-agent <a>` | `dev-senior-backend` | Fallback de EXEC cuando SELECT no designa un agente válido. |
 | `--max-iterations N` | `0` (sin límite duro) | Tope de iteraciones. El freno real es la racha de no-progreso. |
 | `--max-turns N` | `40` | Presupuesto de turnos de la fase EXEC. SELECT usa 15 fijo (sólo lee y decide). |
@@ -50,14 +54,46 @@ ejecución (una vuelta del loop). Una iteración cierra **como mucho** una tarea
 Cada iteración son dos invocaciones aisladas, y cada una corre con el modelo que declara **su**
 agente:
 
-| | Fase 1 — SELECT | Fase 2 — EXEC |
-|---|---|---|
-| Agente | `@meta-router` (haiku) | el que SELECT designó (sonnet/opus) |
-| Presupuesto | 15 turnos | `--max-turns` (40) |
-| Contexto mínimo | consulta del roadmap + tareas de la épica | la tarea + épica + `PROJECT.md` del dueño del código |
-| Hace | elige la tarea y designa ejecutor | ejecuta esa única tarea y cierra |
-| No hace | leer código, editar, marcar `[x]` | elegir otra tarea, encadenar la siguiente |
-| Devuelve | `LOOP-SELECT: proyecto= epica= tarea= ceremony= agente=` | `NEXT-TASK: done\|checkpoint\|blocked` |
+| | Fase 1 — SELECT | Fase 2 — EXEC | Fase 3 — REVIEW (sólo L4) |
+|---|---|---|---|
+| Agente | `@meta-router` (haiku) | el que SELECT designó (sonnet/opus) | `@dev-security` (opus, read-only) |
+| Presupuesto | 15 turnos | `--max-turns` (40) | 25 turnos |
+| Contexto mínimo | consulta del roadmap + tareas de la épica | la tarea + épica + `PROJECT.md` del dueño del código | lo que EXEC dejó (plan o diff) |
+| Hace | elige la tarea y designa ejecutor | ejecuta esa única tarea y cierra | dictamina sobre auth/identidad/money/PII/RLS |
+| No hace | leer código, editar, marcar `[x]` | elegir otra tarea, encadenar la siguiente | editar, commitear, "arreglar" |
+| Devuelve | `LOOP-SELECT: proyecto= epica= tarea= ceremony= agente=` | `NEXT-TASK: done\|checkpoint\|blocked` | `SECURITY-REVIEW: ok\|objeciones\|bloqueante` |
+
+### Gate L4 y sign-off
+
+RULE-10 siempre exigió `@dev-security` en L4, pero dependía de que el agente ejecutor se acordara
+de invocarlo. Desde 2026-07-27 es una fase del runner: si el ceremony es L4, la revisión **ocurre**.
+
+Con `--interactive-signoff` **y** TTY, el runner pregunta por consola:
+
+```
+  ┌─ GATE L4 ─────────────────────────────────────────────
+  │ PLAT-E39.DESIGN
+  │ Veredicto de @dev-security: SECURITY-REVIEW: objeciones — …
+  └───────────────────────────────────────────────────────
+  ¿Aprobás? [s/N] (timeout 600s → NO):
+```
+
+Reglas del prompt, todas verificadas:
+
+| Situación | Resultado |
+|---|---|
+| `s` / `si` / `y` / `yes` | APROBADO — se registra y el loop sigue |
+| `n`, enter vacío, cualquier otra cosa | NO APROBADO — se registra y corta |
+| Timeout o EOF | NO APROBADO — ante la duda, en L4 no se avanza |
+| **Sin TTY** (cron, `nohup`, background) | **No pregunta**: registra `PENDIENTE` y sigue el flujo normal |
+| Veredicto `bloqueante` | No se ofrece sign-off — corta directamente |
+
+Lo de "sin TTY" no es un detalle: un `read` sin terminal cuelga el proceso **para siempre**, que es
+el peor modo de fallo posible para un runner autónomo. Por eso el prompt es opt-in y condicionado.
+
+Toda decisión se escribe en `management/escalations/AAAA-MM-DD_<épica>-<tarea>-signoff.md` con el
+veredicto de seguridad completo. **El sign-off no es un keystroke: es un archivo.** Sin rastro de
+qué se aprobó y con qué análisis, el gate L4 se degrada a un trámite.
 
 Comportamiento de borde:
 

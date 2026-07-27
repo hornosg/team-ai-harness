@@ -111,6 +111,14 @@ PHASES="split"
 SELECT_AGENT="meta-router"      # fase SELECT: clasificar/elegir, no ejecutar (haiku por frontmatter)
 FALLBACK_EXEC_AGENT="dev-senior-backend"  # si SELECT no designa un agente válido para EXEC
 SELECT_MAX_TURNS=15             # SELECT sólo lee y decide: no necesita el presupuesto de EXEC
+SECURITY_AGENT="dev-security"   # fase REVIEW en L4 — opus y read-only por frontmatter
+REVIEW_MAX_TURNS=25             # revisar es leer y dictaminar, no implementar
+# Sign-off interactivo del owner tras la revisión L4. OPT-IN y sólo con TTY: el loop está pensado
+# para correr desatendido, y un `read` sin terminal (cron, nohup, background) cuelga el proceso
+# para siempre. Sin TTY o sin el flag, el comportamiento es el de siempre: cortar con checkpoint
+# dejando el veredicto escrito. Ver también §D.5 de la skill ("nunca esperar input en headless").
+INTERACTIVE_SIGNOFF=false
+SIGNOFF_TIMEOUT=600             # segundos; vencido, se trata como "no aprobado" y corta
 NO_PROGRESS_THRESHOLD=2
 # Terminaciones anormales consecutivas (max-turns o salida sin marcador NEXT-TASK) antes de cortar.
 # Más bajo que NO_PROGRESS_THRESHOLD a propósito: una anormal cuesta el presupuesto completo de
@@ -137,6 +145,10 @@ while [[ $# -gt 0 ]]; do
     --phases) PHASES="$2"; shift 2 ;;
     --select-agent) SELECT_AGENT="$2"; shift 2 ;;
     --exec-agent) FALLBACK_EXEC_AGENT="$2"; shift 2 ;;
+    --security-agent) SECURITY_AGENT="$2"; shift 2 ;;
+    --no-security-review) SECURITY_AGENT=""; shift ;;
+    --interactive-signoff) INTERACTIVE_SIGNOFF=true; shift ;;
+    --signoff-timeout) SIGNOFF_TIMEOUT="$2"; shift 2 ;;
     --dry-run) DRY_RUN=true; shift ;;
     *) echo "Argumento desconocido: $1" >&2; exit 1 ;;
   esac
@@ -263,6 +275,55 @@ import json, sys
 d = json.load(sys.stdin)
 print("@%s modelo=%s context_mode=%s pack=%sB" % (d["agent"], d["model"], d.get("context_mode"), d["context_bytes"]))
 '
+}
+
+# Escribe el registro del gate L4 en disco. El sign-off del owner NO puede ser sólo un keystroke:
+# sin rastro de qué se aprobó, con qué veredicto de seguridad y cuándo, el gate L4 se degrada a un
+# trámite. Este archivo es lo que después justifica el commit.
+write_signoff() {
+  local decision="$1" epica="$2" tarea="$3" verdict="$4" review="$5"
+  local dir="$LAB_ROOT/management/escalations"
+  local file="$dir/$(date +%Y-%m-%d)_${epica}-${tarea}-signoff.md"
+  mkdir -p "$dir"
+  # `printf '- ...'` NO: printf toma el guión inicial como flag y falla ("invalid option").
+  # Todo el contenido va por %s, que además evita que un `%` en la revisión rompa el formato.
+  {
+    printf '# Gate L4 — %s.%s\n\n' "$epica" "$tarea"
+    printf '%s\n' "- **Decisión del owner**: $decision"
+    printf '%s\n' "- **Fecha**: $(date '+%Y-%m-%d %H:%M:%S %Z')"
+    printf '%s\n' "- **Veredicto de @$SECURITY_AGENT**: $verdict"
+    printf '%s\n\n' "- **Modo**: sign-off desde la consola del loop (loop-runner.sh)"
+    printf '%s\n\n%s\n' "## Revisión de seguridad" "$review"
+  } > "$file"
+  # Verificación en disco, mismo criterio que la escalación L4 de la skill: nunca asumir que un
+  # write reportado ocurrió.
+  if [[ -s "$file" ]]; then
+    log "  sign-off registrado en ${file#"$LAB_ROOT"/}"
+    return 0
+  fi
+  log "  ⚠ NO se pudo escribir el sign-off en $file — tratando como NO aprobado"
+  return 1
+}
+
+# Pregunta al owner. Devuelve 0 sólo ante un "s" explícito. Cualquier otra cosa —"n", timeout,
+# EOF, respuesta vacía— es NO: ante la duda, en L4 no se avanza.
+prompt_signoff() {
+  local epica="$1" tarea="$2" verdict="$3" answer=""
+  printf '\n'
+  printf '  ┌─ GATE L4 ─────────────────────────────────────────────\n'
+  printf '  │ %s.%s\n' "$epica" "$tarea"
+  printf '  │ Veredicto de @%s: %s\n' "$SECURITY_AGENT" "$verdict"
+  printf '  │ La revisión completa está arriba, en la salida de la fase REVIEW.\n'
+  printf '  └───────────────────────────────────────────────────────\n'
+  printf '  ¿Aprobás? [s/N] (timeout %ss → NO): ' "$SIGNOFF_TIMEOUT"
+  # `read -t` sale con código >128 al vencer; con set -e eso mataría el runner.
+  read -r -t "$SIGNOFF_TIMEOUT" answer || answer=""
+  printf '\n'
+  case "${answer,,}" in
+    s|si|sí|y|yes) return 0 ;;
+    "") log "  sin respuesta (timeout o EOF) → NO aprobado" ; return 1 ;;
+    *) return 1 ;;
+  esac
 }
 
 dispatch_agent() {
@@ -549,7 +610,7 @@ while true; do
   # Reset explícito: bash conserva estas variables entre vueltas del while, y una iteración que
   # no despacha EXEC heredaría el output de la anterior en el log de traza.
   select_output=""; exec_output=""; sel_agente=""; sel_epica=""; sel_tarea=""
-  sel_ceremony=""; sel_proyecto=""; select_line=""
+  sel_ceremony=""; sel_proyecto=""; select_line=""; review_output=""; review_verdict=""
   # Foto del estado git ANTES de trabajar, para poder atribuirle a esta iteración sólo lo que
   # ensució ella y no lo que ya venía sucio de otras sesiones.
   dirty_before="$(dirty_snapshot)"
@@ -633,6 +694,60 @@ while true; do
         echo "$exec_output"
         # El marcador terminal que el runner evalúa es SIEMPRE el de la fase que ejecutó.
         output="$exec_output"
+
+        # -----------------------------------------------------------------------------------
+        # FASE 3 — REVIEW (sólo L4). Condicional, read-only, con @dev-security (opus).
+        #
+        # RULE-10 exige @dev-security en el diseño L4, pero hasta ahora eso dependía de que el
+        # agente ejecutor se acordara de invocarlo. Cableado acá, es estructural: si el ceremony
+        # es L4, la revisión ocurre — sobre el plan recién escrito o sobre el diff implementado,
+        # que es lo que el propio agente distingue al leer el estado.
+        #
+        # No corre si EXEC salió `blocked`: no hay nada que revisar todavía.
+        # -----------------------------------------------------------------------------------
+        if [[ "$sel_ceremony" == "L4" && -n "$SECURITY_AGENT" ]] \
+           && ! echo "$exec_output" | grep -q "NEXT-TASK: blocked"; then
+          PROMPT="Revisión de seguridad OBLIGATORIA del gate L4 (RULE-10). $scope_prompt"
+          PROMPT="$PROMPT Tarea: $sel_epica.$sel_tarea (ceremony L4), ejecutada por @$sel_agente."
+          PROMPT="$PROMPT Revisá lo que esa iteración dejó: si escribió un plan de épica, revisá el"
+          PROMPT="$PROMPT DISEÑO (superficie de auth/identidad/money/PII/RLS, decisiones abiertas);"
+          PROMPT="$PROMPT si implementó una tarea, revisá el DIFF sin commitear en el repo del"
+          PROMPT="$PROMPT servicio. Sos read-only: NO edites, NO commitees, NO 'arregles' — señalá."
+          PROMPT="$PROMPT Aplicá la skill owasp-top10. Sé concreto: archivo y línea cuando corresponda."
+          PROMPT="$PROMPT Terminá SIEMPRE con la línea 'SECURITY-REVIEW: ok|objeciones|bloqueante <resumen>'"
+          PROMPT="$PROMPT donde 'bloqueante' significa que NO debe aprobarse como está."
+          log "iteración $iteration — fase REVIEW L4 de $sel_epica.$sel_tarea con @$SECURITY_AGENT (--max-turns $REVIEW_MAX_TURNS)"
+          review_output="$(dispatch_agent "$SECURITY_AGENT" "$PROMPT" "$REVIEW_MAX_TURNS")"
+          echo "$review_output"
+          review_verdict="$(echo "$review_output" | grep -oE "SECURITY-REVIEW: (ok|objeciones|bloqueante)[^\\\\\"]*" | tail -1 || true)"
+          [[ -z "$review_verdict" ]] && review_verdict="SECURITY-REVIEW: <sin veredicto — la revisión no cerró>"
+
+          # Sign-off del owner. Sólo con --interactive-signoff Y terminal: sin TTY un `read` cuelga
+          # el proceso para siempre, que es el peor modo de fallo posible para un runner autónomo.
+          if [[ "$INTERACTIVE_SIGNOFF" == true && -t 0 ]]; then
+            if echo "$review_verdict" | grep -q "bloqueante"; then
+              log "⚠ @$SECURITY_AGENT marcó BLOQUEANTE — no se ofrece sign-off"
+              write_signoff "NO APROBADO (bloqueante de seguridad)" "$sel_epica" "$sel_tarea" "$review_verdict" "$review_output" || true
+              log "épica $EPICA frenada por revisión de seguridad bloqueante → deteniendo"
+              break
+            fi
+            if prompt_signoff "$sel_epica" "$sel_tarea" "$review_verdict"; then
+              if write_signoff "APROBADO" "$sel_epica" "$sel_tarea" "$review_verdict" "$review_output"; then
+                log "✓ sign-off del owner registrado — la próxima iteración puede avanzar el gate"
+              else
+                break
+              fi
+            else
+              write_signoff "NO APROBADO" "$sel_epica" "$sel_tarea" "$review_verdict" "$review_output" || true
+              log "sign-off denegado por el owner → deteniendo"
+              break
+            fi
+          else
+            # Modo desatendido: el veredicto queda escrito y el owner decide fuera del loop.
+            write_signoff "PENDIENTE (corrida desatendida — sin sign-off)" "$sel_epica" "$sel_tarea" "$review_verdict" "$review_output" || true
+            [[ "$INTERACTIVE_SIGNOFF" == true ]] && log "  (--interactive-signoff pedido pero no hay TTY → se registra y sigue el flujo normal)"
+          fi
+        fi
       fi
     fi
   fi
