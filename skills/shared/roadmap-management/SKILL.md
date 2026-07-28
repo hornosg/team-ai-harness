@@ -136,6 +136,39 @@ Trigger: propuesta aprobada por el owner.
    - Omitir el campo = épica desbloqueada (no escribir `depende_de: []`).
    - Al agregar/cambiar orden de ejecución, actualizar el campo — no solo el comentario.
 
+## El "Hecho cuando" es la parte que más se escribe mal
+
+Un criterio de aceptación mal redactado no falla ruidosamente: **se cumple**. El agente lo
+satisface al pie de la letra, marca `[x]` con razón, y el trabajo queda sin hacer sin que nadie
+se entere. Tres casos en dos días (2026-07-26/28):
+
+| Caso | El criterio pedía | Lo que no verificaba |
+|---|---|---|
+| PLAT-E38 T-STK-M3 | un spam de `/health` | lo que la tarea anterior ya había declarado insuficiente |
+| PLAT-E39 T2–T6 | "devuelve la misma lista que pim" | la autorización — razón de ser de la épica (objeción B1 de @dev-security) |
+| PLAT-E39 T1a | healthy + `/health` + `/metrics` | la estructura que el propio contrato prometía |
+
+Cuatro reglas, todas verificables por `scripts/check-criterios.py`:
+
+1. **Cubrí el contrato.** Cada artefacto que el contrato promete tiene que aparecer en el criterio.
+   Si el contrato lo nombra y el criterio no lo mira, no se va a hacer.
+2. **Que sea ejecutable.** Un comando o un código de respuesta, no prosa. "Funciona correctamente"
+   no es un criterio.
+3. **Decí qué debe FALLAR.** Un criterio que sólo prueba el camino feliz pasa igual con el control
+   ausente. `curl` sin token → **401**; `INSERT` con el usuario read-only → **error de permisos**;
+   `grep` del patrón prohibido → **sin resultados**.
+4. **Que sea verificable HOY.** No escribas un check E2E sobre una superficie que la tarea no monta:
+   si la ruta todavía no existe, `curl` devuelve 404 y el check "pasa" sin probar nada. Ese chequeo
+   pertenece a la tarea que crea la ruta.
+
+```bash
+scripts/check-criterios.py platform/epicas/PLAT-E39-*.md   # una épica
+scripts/check-criterios.py --all --solo-abiertas           # todo lo pendiente
+```
+
+Es heurístico: avisa, no bloquea. Un aviso falso se ignora en dos segundos; uno real cuesta una
+épica entera ejecutada sobre criterios que no prueban nada.
+
 ## Cómo actualizar estado
 
 Al completar tareas o épicas:
