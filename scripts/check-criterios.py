@@ -43,12 +43,16 @@ FIELD_RE = re.compile(r"^\s+(?P<key>Objetivo|Contrato|Hecho cuando|Depende de|Ce
 
 # Señales de que el criterio se puede ejecutar y no es prosa.
 EXECUTABLE = re.compile(
-    r"`[^`]*(?:curl|docker|go |grep|psql|make|npm|pytest|test |ls |cat |find|\./)[^`]*`"
-    r"|HTTP \d{3}|→ *\d{3}|\b\d{3}\b(?= *(?:/|,|;|\.|$))"
+    r"`[^`]*(?:curl|docker|go |grep|psql|make|npm|pytest|test |ls |cat |find|\./"
+    # SQL cuenta como check ejecutable: una consulta con resultado esperado es tan verificable
+    # como un curl. Sin esto el linter marcaba como "prosa" criterios que decían
+    # `SELECT tablename FROM pg_tables …` → 0 filas.
+    r"|SELECT |INSERT |DROP |UPDATE |GRANT )[^`]*`"
+    r"|HTTP \d{3}|→ *\d{3}|\b\d{3}\b(?= *(?:/|,|;|\.|$))|\*\*\d+ filas?\*\*|→ *\*\*\d+"
 )
 # Señales de que el criterio prueba que algo FALLA cuando debe fallar.
 NEGATIVE = re.compile(
-    r"\bfalla\b|\bdebe fallar\b|\bsin resultados\b|\bno encuentra\b|\bsin JWT\b|\brechaza\b"
+    r"\bfalla\b|\bFALLA\b|\b0 filas\b|\bidéntico\b|\bdebe fallar\b|\bsin resultados\b|\bno encuentra\b|\bsin JWT\b|\brechaza\b"
     r"|\b40[13]\b|\b4\d\d\b|\bdeny\b|\bno devuelve\b|\bsin \w+\b.*→|error de permisos|por permisos",
     re.IGNORECASE,
 )
