@@ -127,12 +127,21 @@ REMEDIATE_ON_COMMIT=false
 # para siempre. Sin TTY o sin el flag, el comportamiento es el de siempre: cortar con checkpoint
 # dejando el veredicto escrito. Ver también §D.5 de la skill ("nunca esperar input en headless").
 INTERACTIVE_SIGNOFF=false
-SIGNOFF_TIMEOUT=600             # segundos; vencido, se trata como "no aprobado" y corta
+# Un veredicto L4 son varios miles de palabras que hay que LEER antes de decidir. 600s no
+# alcanzaban (PLAT-E39.T1f venció mientras el owner leía). No es un parámetro de impaciencia:
+# es cuánto tarda una persona en evaluar una revisión de seguridad.
+SIGNOFF_TIMEOUT=1800            # segundos; vencido, se registra SIN RESPUESTA (no "rechazado")
 # Remediación de un veredicto `bloqueante`: el agente que escribió el plan resuelve las objeciones
 # y @dev-security re-revisa. Tope BAJO a propósito — si dos revisiones seguidas siguen bloqueando,
 # el problema es de diseño y lo tiene que mirar una persona, no otra vuelta del ciclo.
 REMEDIATE_AGENT="dev-architect"  # quien corrige el plan (necesita Write; dev-security es read-only)
 REMEDIATE_CYCLES=1               # 0 = desactivado: bloqueante corta de una
+# Retomar un gate cuyo veredicto ya se pagó. Cuando el sign-off queda SIN RESPUESTA (el owner no
+# alcanzó a leer la revisión antes del timeout), volver a correr @dev-security cuesta otra
+# invocación opus para producir el mismo dictamen sobre el mismo diff. Con --resume-gate se reusa
+# el veredicto registrado y se va directo a preguntar.
+# ADVERTENCIA que el runner imprime: si el diff cambió desde entonces, el veredicto ya no aplica.
+RESUME_GATE=false
 NO_PROGRESS_THRESHOLD=2
 # Terminaciones anormales consecutivas (max-turns o salida sin marcador NEXT-TASK) antes de cortar.
 # Más bajo que NO_PROGRESS_THRESHOLD a propósito: una anormal cuesta el presupuesto completo de
@@ -174,6 +183,7 @@ while [[ $# -gt 0 ]]; do
     --signoff-timeout) SIGNOFF_TIMEOUT="$2"; shift 2 ;;
     --remediate-agent) REMEDIATE_AGENT="$2"; shift 2 ;;
     --remediate-cycles) REMEDIATE_CYCLES="$2"; shift 2 ;;
+    --resume-gate) RESUME_GATE=true; shift ;;
     --review-turns) REVIEW_MAX_TURNS="$2"; shift 2 ;;
     --review-commit-turns) REVIEW_COMMIT_TURNS="$2"; shift 2 ;;
     --remediate-on-commit) REMEDIATE_ON_COMMIT=true; shift ;;
@@ -347,10 +357,18 @@ prompt_signoff() {
   # `read -t` sale con código >128 al vencer; con set -e eso mataría el runner.
   read -r -t "$SIGNOFF_TIMEOUT" answer || answer=""
   printf '\n'
+  # Se distingue el NO explícito del silencio. Ambos frenan el gate — en L4, ante la duda no se
+  # avanza — pero NO son lo mismo y el registro no puede decir que fueron lo mismo: "NO APROBADO"
+  # sobre trabajo que el owner nunca llegó a evaluar es un archivo que miente. Observado en
+  # PLAT-E39.T1f (2026-07-28): el veredicto de @dev-security eran ~4.000 palabras y los 600s
+  # vencieron mientras el owner lo leía.
   case "${answer,,}" in
-    s|si|sí|y|yes) return 0 ;;
-    "") log "  sin respuesta (timeout o EOF) → NO aprobado" ; return 1 ;;
-    *) return 1 ;;
+    s|si|sí|y|yes) SIGNOFF_OUTCOME="APROBADO"; return 0 ;;
+    "") SIGNOFF_OUTCOME="SIN RESPUESTA (venció el timeout de ${SIGNOFF_TIMEOUT}s — el owner no llegó a decidir, NO es un rechazo)"
+        log "  sin respuesta en ${SIGNOFF_TIMEOUT}s → no se avanza (no es un rechazo: nadie decidió)"
+        log "  Para retomar sin volver a pagar la revisión: --resume-gate (reusa este veredicto)"
+        return 1 ;;
+    *) SIGNOFF_OUTCOME="NO APROBADO (rechazo explícito del owner)"; return 1 ;;
   esac
 }
 
@@ -407,6 +425,25 @@ run_l4_gate() {
   prompt="$prompt pronunciate sobre CADA decisión de diseño abierta que encuentres."
   prompt="$prompt Terminá SIEMPRE con la línea 'SECURITY-REVIEW: ok|objeciones|bloqueante <resumen>'"
   prompt="$prompt donde 'bloqueante' significa que NO debe aprobarse como está."
+
+  # Veredicto ya pagado y sin decidir: se reusa en vez de re-comprar la misma revisión.
+  if [[ "$RESUME_GATE" == true ]]; then
+    local previo
+    previo="$(ls -t "$LAB_ROOT/management/escalations/"*"${epica}-${tarea}-signoff.md" 2>/dev/null | head -1)"
+    if [[ -n "$previo" ]] && grep -q "SIN RESPUESTA" "$previo"; then
+      review_verdict="$(grep -m1 "Veredicto de @" "$previo" | sed "s/.*\*\*: //")"
+      review_output="$(sed -n "/## Revisión de seguridad/,\$p" "$previo")"
+      log "  --resume-gate: reusando el veredicto de ${previo##*/} (no se re-ejecuta @$SECURITY_AGENT)"
+      log "  ⚠ vale sólo si el diff NO cambió desde entonces — si lo tocaste, corré sin --resume-gate"
+      if [[ "$INTERACTIVE_SIGNOFF" == true && -t 0 ]] && prompt_signoff "$epica" "$tarea" "$review_verdict"; then
+        write_signoff "APROBADO" "$epica" "$tarea" "$review_verdict" "$review_output" || return 1
+        return 0
+      fi
+      write_signoff "${SIGNOFF_OUTCOME:-NO APROBADO}" "$epica" "$tarea" "$review_verdict" "$review_output" || true
+      return 1
+    fi
+    log "  --resume-gate pedido pero no hay veredicto previo sin decidir → se corre la revisión normal"
+  fi
 
   local cycle=0 first_verdict="" remediation_trail=""
   while :; do
@@ -493,8 +530,7 @@ run_l4_gate() {
   fi
 
   if ! prompt_signoff "$epica" "$tarea" "$review_verdict"; then
-    write_signoff "NO APROBADO" "$epica" "$tarea" "$review_verdict" "$review_output" || true
-    log "sign-off denegado por el owner"
+    write_signoff "${SIGNOFF_OUTCOME:-NO APROBADO}" "$epica" "$tarea" "$review_verdict" "$review_output" || true
     return 1
   fi
 

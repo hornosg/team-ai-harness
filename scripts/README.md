@@ -39,7 +39,8 @@ Desde 2026-07-27 cada iteración son **dos invocaciones** (`SELECT` → `EXEC`) 
 | `--security-agent <a>` | `dev-security` | Agente de la fase REVIEW (sólo L4). |
 | `--no-security-review` | — | Desactiva la fase REVIEW. **No usar en L4 real**: RULE-10 la exige. |
 | `--interactive-signoff` | desactivado | Tras REVIEW, pregunta `¿Aprobás? [s/N]` por consola. **Sólo con TTY**: sin terminal se registra el veredicto y sigue, nunca cuelga. |
-| `--signoff-timeout N` | `600` | Segundos de espera de esa respuesta. Vencido = NO aprobado. |
+| `--signoff-timeout N` | `1800` | Segundos de espera. Vencido se registra **SIN RESPUESTA**, que no es lo mismo que un rechazo. |
+| `--resume-gate` | desactivado | Reusa el veredicto de un gate que quedó SIN RESPUESTA, sin volver a pagar la revisión de opus. Sólo válido si el diff no cambió. |
 | `--remediate-agent <a>` | `dev-architect` | Quien corrige el plan tras un veredicto `bloqueante`. Necesita `Write` (`dev-security` es read-only). |
 | `--remediate-cycles N` | `1` | Ciclos de remediación + re-revisión en el gate de **plan**. `0` desactiva: `bloqueante` corta de una. |
 | `--review-turns N` | `25` | Presupuesto del gate de **plan** (revisar un diseño entero). |
@@ -96,16 +97,22 @@ Con `--interactive-signoff` **y** TTY, el runner pregunta por consola:
   │ PLAT-E39.DESIGN
   │ Veredicto de @dev-security: SECURITY-REVIEW: objeciones — …
   └───────────────────────────────────────────────────────
-  ¿Aprobás? [s/N] (timeout 600s → NO):
+  ¿Aprobás? [s/N] (timeout 1800s → NO):
 ```
+
+**Timeout ≠ rechazo.** Un veredicto L4 son varios miles de palabras que hay que leer antes de
+decidir; en PLAT-E39.T1f los 600s originales vencieron mientras el owner lo leía, y el archivo
+quedó diciendo "NO APROBADO" sobre trabajo que nadie llegó a evaluar. Un registro que miente sobre
+por qué algo no se aprobó es peor que no tenerlo. El default subió a 1800s, el motivo real se
+registra, y `--resume-gate` permite retomar sin re-comprar la revisión.
 
 Reglas del prompt, todas verificadas:
 
 | Situación | Resultado |
 |---|---|
 | `s` / `si` / `y` / `yes` | APROBADO — se registra y el loop sigue |
-| `n`, enter vacío, cualquier otra cosa | NO APROBADO — se registra y corta |
-| Timeout o EOF | NO APROBADO — ante la duda, en L4 no se avanza |
+| `n`, enter vacío, cualquier otra cosa | **NO APROBADO** (rechazo explícito) — se registra y corta |
+| Timeout o EOF | **SIN RESPUESTA** — corta igual (en L4, ante la duda no se avanza) pero el registro dice que nadie decidió, no que se rechazó |
 | **Sin TTY** (cron, `nohup`, background) | **No pregunta**: registra `PENDIENTE` y sigue el flujo normal |
 | Veredicto `bloqueante` | Dispara REMEDIATE (ver abajo); si tras el ciclo sigue bloqueante, corta sin ofrecer sign-off |
 
@@ -146,6 +153,23 @@ reportar el false-dispatch. Tenía razón — y el prompt le había afirmado com
 
 > **Nunca afirmarle a un agente que algo existe sin haberlo verificado.** La revisión buena cuesta
 > una invocación cara; la mala fabrica un veredicto sobre nada.
+
+### El `tools:` del frontmatter NO restringe (verificado)
+
+Un agente despachado por `agent-dispatcher.py` corre en un `claude -p` top-level, que tiene
+**todas** las tools. El `tools: [...]` de su frontmatter viaja en el pack como texto, no como
+restricción: describe el rol, no lo limita.
+
+Verificado en PLAT-E39.T1f (2026-07-28): SELECT designó `@dev-architect` — que declara
+`tools: [Read, Grep, Glob, WebFetch, WebSearch, Skill]`, sin `Write` — para una tarea que mueve
+código entre repos. **Escribió el código igual**, corrió los tests y cerró con checkpoint correcto.
+
+Esto es distinto del bug de `a4fb716`: ahí `@meta-router` se invocaba como **subagente** vía la
+tool `Agent`, donde las tools sí se aplican. Por el dispatcher, no.
+
+Consecuencia práctica: SELECT puede designar por dominio sin preocuparse por la capacidad. Pero el
+frontmatter deja de ser una garantía — si querés que un agente **realmente** no pueda escribir, el
+dispatcher no es el camino.
 
 ### Si la revisión no cierra
 
