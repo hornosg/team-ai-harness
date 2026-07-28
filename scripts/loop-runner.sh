@@ -655,6 +655,25 @@ repo_list() {
   done
 }
 
+# Directorios de servicio que NO son repos git todavía. Un scaffold recién creado por una tarea de
+# extracción vive acá: tiene código real y ningún `git status` lo reporta, así que el aviso de
+# "trabajo a medias" era ciego justo para el caso donde más importa.
+#
+# Observado en PLAT-E39.T1a (2026-07-27): EXEC murió por turnos habiendo creado `catalog-service/`
+# entero (Dockerfile, go.mod, cmd/, docker-compose.yml y hasta un binario compilado de 20 MB). El
+# runner informó "ningún repo cambió en esta iteración" porque el directorio no tenía `.git`.
+untracked_service_dirs() {
+  local r out=""
+  for r in "$LAB_ROOT"/active/mercado-cercano/services/*/ "$LAB_ROOT"/platform/*/; do
+    [[ -d "$r" ]] || continue
+    [[ -d "$r/.git" ]] && continue
+    # Vacío o sólo con ocultos: no es trabajo a medias, es un directorio suelto.
+    [[ -n "$(find "$r" -maxdepth 1 -not -name '.*' -not -path "$r" -print -quit 2>/dev/null)" ]] || continue
+    out+="$(basename "${r%/}") "
+  done
+  echo "$out"
+}
+
 dirty_snapshot() {
   local r
   while IFS= read -r r; do
@@ -822,6 +841,7 @@ while true; do
   # Foto del estado git ANTES de trabajar, para poder atribuirle a esta iteración sólo lo que
   # ensució ella y no lo que ya venía sucio de otras sesiones.
   dirty_before="$(dirty_snapshot)"
+  untracked_before="$(untracked_service_dirs)"
 
   scope_prompt="Roadmap: $ROADMAP_GLOB."
   if [[ -n "$PROYECTO" ]]; then
@@ -1062,9 +1082,16 @@ while true; do
       log "⚠ hubo cambios en disco SIN marcador de cierre → hay trabajo a medias que la próxima"
       log "  iteración va a heredar sin saberlo. Revisá antes de reanudar."
       dirty="$(dirty_repos_since "$dirty_before")"
+      untracked_now="$(untracked_service_dirs)"
       if [[ -n "$dirty" ]]; then
         log "  repos que ensució ESTA iteración: $dirty"
-      else
+      fi
+      # Un servicio recién scaffoldeado no aparece en ningún `git status`: se informa aparte.
+      if [[ "$untracked_now" != "${untracked_before:-}" ]]; then
+        log "  ⚠ servicios SIN repo git (scaffold a medias, invisible a git): $untracked_now"
+        log "    Revisá antes de reanudar: la próxima iteración los hereda sin saber qué falta."
+      fi
+      if [[ -z "$dirty" && "$untracked_now" == "${untracked_before:-}" ]]; then
         log "  ningún repo cambió en esta iteración (el cambio de hash vino del roadmap/épicas)"
       fi
     fi
