@@ -98,9 +98,9 @@ def artifacts(text: str) -> set[str]:
         # Lo que el contrato dice explícitamente que NO produce tampoco es su entregable: paths que
         # declara no tocar, no crear, o de los que sólo se cuida de no colisionar.
         escaped = re.escape(value)
-        if re.search(rf"(?:no colision\w*|sin tocar|\*\*(?:NO|no)\*\*|\bno se cre\w+|\bnunca\b)[^`]*`{escaped}`", text, re.I):
+        if re.search(rf"(?:no colision\w*|sin tocar|\*\*(?:NO|no)\*\*|\bno se (?:cre|toca|modific)\w+|\bnunca\b)[^`]*`{escaped}`", text, re.I):
             continue
-        if re.search(rf"`{escaped}`[^.;]*\b(?:NO|no) se cre\w+", text, re.I):
+        if re.search(rf"`{escaped}`[^.;]*\b(?:NO|no) se (?:cre|toca|modific)\w+", text, re.I):
             continue
         # Sólo paths, archivos y comandos — no prosa entre backticks.
         if "/" in value or value.endswith((".go", ".sql", ".yml", ".yaml", ".toml")):
