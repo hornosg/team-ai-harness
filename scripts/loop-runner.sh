@@ -322,6 +322,7 @@ write_signoff() {
   local decision="$1" epica="$2" tarea="$3" verdict="$4" review="$5"
   local dir="$LAB_ROOT/management/escalations"
   local file="$dir/$(date +%Y-%m-%d)_${epica}-${tarea}-signoff.md"
+  SIGNOFF_FILE="$file"   # lo consume la verificación de la anotación en la épica, más abajo
   mkdir -p "$dir"
   # `printf '- ...'` NO: printf toma el guión inicial como flag y falla ("invalid option").
   # Todo el contenido va por %s, que además evita que un `%` en la revisión rompa el formato.
@@ -430,7 +431,12 @@ run_l4_gate() {
   if [[ "$RESUME_GATE" == true ]]; then
     local previo
     previo="$(ls -t "$LAB_ROOT/management/escalations/"*"${epica}-${tarea}-signoff.md" 2>/dev/null | head -1)"
-    if [[ -n "$previo" ]] && grep -q "SIN RESPUESTA" "$previo"; then
+    # Qué califica como "pagado y sin decidir": el timeout (SIN RESPUESTA) y un gate que quedó
+    # abierto por un fallo del propio runner (SIN DECIDIR — ver el bug del clasificador de veredicto,
+    # PLAT-E39.T2 2026-07-29). NO califican: APROBADO, el rechazo explícito del owner, ni SIN REVISAR
+    # (ahí no hay veredicto que reusar). Reusar un veredicto ya emitido ahorra una invocación de opus;
+    # reusar uno inexistente le pediría al owner firmar sobre nada.
+    if [[ -n "$previo" ]] && grep -qE "SIN RESPUESTA|SIN DECIDIR" "$previo"; then
       review_verdict="$(grep -m1 "Veredicto de @" "$previo" | sed "s/.*\*\*: //")"
       review_output="$(sed -n "/## Revisión de seguridad/,\$p" "$previo")"
       log "  --resume-gate: reusando el veredicto de ${previo##*/} (no se re-ejecuta @$SECURITY_AGENT)"
@@ -445,16 +451,24 @@ run_l4_gate() {
     log "  --resume-gate pedido pero no hay veredicto previo sin decidir → se corre la revisión normal"
   fi
 
-  local cycle=0 first_verdict="" remediation_trail=""
+  local cycle=0 first_verdict="" remediation_trail="" review_class=""
   while :; do
     log "iteración $iteration — fase REVIEW L4 ($modo) de $epica.$tarea con @$SECURITY_AGENT (ciclo $((cycle + 1)), --max-turns $turns)"
     review_output="$(dispatch_agent "$SECURITY_AGENT" "$prompt" "$turns")"
     echo "$review_output"
     review_verdict="$(echo "$review_output" | grep -oE "SECURITY-REVIEW: (ok|objeciones|bloqueante)[^\\\\\"]*" | tail -1 || true)"
+    # El VEREDICTO es el token, no la línea. `review_verdict` arrastra el resumen en prosa del
+    # revisor, y ese resumen habla de bloqueos: buscar la palabra suelta ahí lee lo contrario de
+    # lo que el revisor dictaminó. Observado en PLAT-E39.T2 (2026-07-29): el veredicto fue
+    # `objeciones` y el resumen decía "dos observaciones NO bloqueantes" → el `grep -q bloqueante`
+    # matcheó "bloqueantes", el gate se cerró como "NO APROBADO (bloqueante de seguridad)" y el
+    # owner nunca vio el prompt s/n. Un clasificador que se contradice con su propia fuente es
+    # peor que no clasificar: el archivo de escalación queda afirmando un rechazo que nadie emitió.
+    review_class="$(printf '%s\n' "$review_verdict" | sed -nE 's/^SECURITY-REVIEW: (ok|objeciones|bloqueante).*/\1/p')"
     [[ -z "$review_verdict" ]] && review_verdict="SECURITY-REVIEW: <sin veredicto — la revisión no cerró>"
     [[ -z "$first_verdict" ]] && first_verdict="$review_verdict"
 
-    echo "$review_verdict" | grep -q "bloqueante" || break
+    [[ "$review_class" == "bloqueante" ]] || break
 
     if [[ "$cycle" -ge "$cycles" ]]; then
       log "⚠ @$SECURITY_AGENT marcó BLOQUEANTE y se agotaron los ciclos de remediación ($cycles)"
@@ -515,7 +529,10 @@ run_l4_gate() {
   # que apruebe algo que nadie llegó a mirar — peor que no preguntar, porque el archivo quedaría
   # diciendo "APROBADO" con un veredicto vacío al lado. Observado en PLAT-E39.T1 (2026-07-27): la
   # revisión murió sin emitir `SECURITY-REVIEW:` y el runner igual abrió el prompt.
-  if echo "$review_verdict" | grep -q "sin veredicto"; then
+  # Mismo criterio que arriba: "no cerró" es la AUSENCIA de token, no la aparición de una frase.
+  # Con el grep anterior, un revisor que escribiera "sin veredicto" en su propio resumen se
+  # descartaba a sí mismo.
+  if [[ -z "$review_class" ]]; then
     log "⚠ la revisión de seguridad NO cerró (sin marcador SECURITY-REVIEW) → no se ofrece sign-off"
     log "  Probable causa: agotó los $turns turnos. Subilos con --review-turns/--review-commit-turns."
     write_signoff "SIN REVISAR (la revisión de seguridad no cerró)" "$epica" "$tarea" "$review_verdict" "$review_output" || true
@@ -547,10 +564,30 @@ run_l4_gate() {
   prompt="$prompt 'aprobado <fecha>', citando el archivo de respaldo en management/escalations/."
   prompt="$prompt NO ejecutes ninguna tarea de la épica, NO marqués ningún [x], NO commitees."
   prompt="$prompt Terminá con la línea 'NEXT-TASK: checkpoint $epica — gate L4 aprobado y registrado'."
+  # 12 turnos no alcanzaban: el scribe tiene que ubicar el archivo de la épica (40 KB, el encabezado
+  # del gate y el guardrail final están a ~800 líneas de distancia) y editar dos lugares. Murió por
+  # `Reached max turns (12)` en PLAT-E39 (2026-07-30) y el runner igual anunció "aprobado y
+  # registrado": la anotación no existía y el owner tuvo que escribirla a mano.
   log "  registrando el sign-off en el archivo de la épica con @$scribe"
   local scribe_output
-  scribe_output="$(dispatch_agent "$scribe" "$prompt" 12)"
+  scribe_output="$(dispatch_agent "$scribe" "$prompt" 25)"
   echo "$scribe_output"
+
+  # Se verifica EN DISCO, con el mismo criterio que write_signoff: un write reportado no es un write
+  # ocurrido. Sin esto el fallo es silencioso y caro — la próxima iteración lee el gate como pendiente
+  # y reporta `blocked`. El guard de `gates_run` lo atrapa recién en la iteración siguiente; esto lo
+  # dice en el momento, cuando el owner todavía está mirando la consola.
+  local epica_file
+  epica_file="$(find "$LAB_ROOT/management" -path "*epicas/${epica}*.md" -print -quit 2>/dev/null)"
+  if [[ -n "$epica_file" ]] && grep -qF "${SIGNOFF_FILE##*/}" "$epica_file"; then
+    log "  ✓ sign-off registrado en ${epica_file#"$LAB_ROOT"/}"
+    return 0
+  fi
+  # El gate SÍ está aprobado (el respaldo está escrito): lo que falló es la anotación. No se
+  # convierte en un rechazo — se avisa, porque la diferencia importa y el owner tiene que cerrarla.
+  log "  ⚠ el gate quedó APROBADO pero la anotación en el archivo de la épica NO se verificó"
+  log "    (el scribe pudo morir por turnos). Respaldo válido: ${SIGNOFF_FILE#"$LAB_ROOT"/}"
+  log "    Anotalo a mano en el encabezado del gate, o la próxima iteración va a reportar blocked."
   return 0
 }
 
@@ -1063,7 +1100,8 @@ while true; do
     if run_l4_gate "${gate_epica:-desconocida}" "GATE" \
          "El plan/trabajo ya existe de una iteración anterior y está esperando este gate." \
          "plan"; then
-      log "✓ gate L4 aprobado y registrado — reanudando el loop"
+      # No dice "y registrado": eso lo verifica y lo reporta run_l4_gate, que es quien lo sabe.
+      log "✓ gate L4 aprobado — reanudando el loop"
       prev_hash="$(state_hash)"
       no_progress_streak=0
       continue
